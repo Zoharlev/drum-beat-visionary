@@ -42,10 +42,11 @@ export const DrumGrid = ({
 }: DrumGridProps) => {
   
   const getStepFeedback = (drumKey: string, stepIndex: number) => {
-    if (!isMicMode || drumKey !== 'hihat') return null;
+    if (!isMicMode) return null;
     
     const result = noteResults.find(note => 
       note.step === stepIndex && 
+      drumKey === 'hihat' && 
       note.instrument === 'Hi-Hat'
     );
     
@@ -147,37 +148,30 @@ export const DrumGrid = ({
                     >
                       {active && (
                         <div className="relative">
-                          {/* Main purple dot with feedback overlay */}
                           <div
                             className={cn(
-                              "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-background",
+                              "w-6 h-6 rounded-full bg-gradient-to-br from-note-active to-accent",
                               "shadow-note transition-transform duration-200 hover:scale-110",
-                              stepIndex === currentStep && active && "animate-bounce",
-                              // Base color
-                              !feedback && "bg-gradient-to-br from-note-active to-accent",
-                              // Feedback colors override the base
-                              feedback && feedback.hit && feedback.correct && "bg-green-500",
-                              feedback && feedback.hit && feedback.wrongInstrument && "bg-yellow-500",
-                              feedback && feedback.hit && !feedback.correct && !feedback.wrongInstrument && "bg-red-500"
+                              "flex items-center justify-center text-xs font-bold text-background",
+                              stepIndex === currentStep && active && "animate-bounce"
                             )}
                           >
                             {symbol}
                           </div>
                           
-                          {/* Feedback icon overlay - smaller and positioned at top-right */}
+                          {/* Feedback indicators */}
                           {feedback && feedback.hit && (
                             <div className={cn(
-                              "absolute -top-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center",
-                              "border border-background",
-                              feedback.correct ? "bg-green-600" : 
-                              feedback.wrongInstrument ? "bg-yellow-600" : "bg-red-600"
+                              "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center",
+                              feedback.correct ? "bg-green-500" : 
+                              feedback.wrongInstrument ? "bg-yellow-500" : "bg-red-500"
                             )}>
                               {feedback.correct ? (
                                 <Check className="w-2 h-2 text-white" />
                               ) : feedback.wrongInstrument ? (
-                                <AlertTriangle className="w-1.5 h-1.5 text-white" />
+                                <AlertTriangle className="w-2 h-2 text-white" />
                               ) : (
-                                <X className="w-1.5 h-1.5 text-white" />
+                                <X className="w-2 h-2 text-white" />
                               )}
                             </div>
                           )}
