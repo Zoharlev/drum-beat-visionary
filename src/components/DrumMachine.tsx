@@ -25,6 +25,13 @@ interface DetectedHit {
   isHiHat: boolean;
 }
 
+interface PerformanceSummary {
+  hits: number;
+  misses: number;
+  mistakes: number;
+  total: number;
+}
+
 // Generate extended 60-second hi-hat pattern
 const generateExtendedPattern = () => {
   const basePattern = [0.25, 0.73, 1.22, 1.70];
@@ -66,6 +73,7 @@ export const DrumMachine = () => {
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [showSummary, setShowSummary] = useState(false);
 
   // Extended pattern for 60 seconds
   const [scheduledNotes] = useState<ScheduledNote[]>(generateExtendedPattern());
@@ -92,6 +100,15 @@ export const DrumMachine = () => {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+
+  const calculatePerformance = (): PerformanceSummary => {
+    const hits = noteResults.filter(note => note.correct).length;
+    const mistakes = noteResults.filter(note => note.hit && (note.wrongInstrument || note.slightlyOff)).length;
+    const misses = noteResults.filter(note => !note.hit).length;
+    const total = noteResults.length;
+
+    return { hits, misses, mistakes, total };
+  };
 
   const onHitDetected = (hit: DetectedHit) => {
     if (!isPlaying || !isMicListening) {
@@ -186,9 +203,12 @@ export const DrumMachine = () => {
         const scrollOffset = Math.max(0, newStep - 8); // Keep 8 steps visible before current
         setScrollPosition(scrollOffset);
         
-        // Stop at 60 seconds
+        // Stop at 60 seconds and show summary
         if (timeElapsed >= 60) {
           setIsPlaying(false);
+          if (isMicListening) {
+            setShowSummary(true);
+          }
         }
       }, stepDuration / 4); // Update more frequently for smooth scroll
     } else {
@@ -203,7 +223,7 @@ export const DrumMachine = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isPlaying, stepDuration, startTime]);
+  }, [isPlaying, stepDuration, startTime, isMicListening]);
 
   // Play metronome
   useEffect(() => {
@@ -443,6 +463,7 @@ export const DrumMachine = () => {
       setCurrentStep(0);
       setCurrentTimeInSeconds(0);
       setScrollPosition(0);
+      setShowSummary(false);
       console.log('60-second practice started');
     }
     setIsPlaying(!isPlaying);
@@ -462,6 +483,7 @@ export const DrumMachine = () => {
     setCurrentStep(0);
     setCurrentTimeInSeconds(0);
     setScrollPosition(0);
+    setShowSummary(false);
     setNoteResults(scheduledNotes.map(note => ({
       ...note,
       hit: false,
@@ -469,6 +491,11 @@ export const DrumMachine = () => {
       wrongInstrument: false,
       slightlyOff: false
     })));
+  };
+
+  const retryPractice = () => {
+    setShowSummary(false);
+    togglePlay();
   };
 
   const changeBpm = (delta: number) => {
@@ -593,6 +620,94 @@ export const DrumMachine = () => {
           currentTimeInSeconds={currentTimeInSeconds}
           scrollPosition={scrollPosition}
         />
+
+        {/* Performance Summary */}
+        {showSummary && (
+          <div className="mt-8 bg-card rounded-lg p-6 shadow-elevated">
+            <h3 className="text-2xl font-bold text-center mb-6 text-foreground">
+              🎵 Your Performance Summary
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              {(() => {
+                const performance = calculatePerformance();
+                return (
+                  <>
+                    <div className="flex items-center gap-4 bg-green-500/10 rounded-lg p-4">
+                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                        <span className="text-white font-bold">✓</span>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-green-600">{performance.hits}</div>
+                        <div className="text-sm text-muted-foreground">Perfect Hits</div>
+                        <div className="text-xs text-muted-foreground">
+                          {((performance.hits / performance.total) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 bg-red-500/10 rounded-lg p-4">
+                      <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                        <span className="text-white font-bold">✗</span>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-red-600">{performance.misses}</div>
+                        <div className="text-sm text-muted-foreground">Missed Notes</div>
+                        <div className="text-xs text-muted-foreground">
+                          {((performance.misses / performance.total) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 bg-yellow-500/10 rounded-lg p-4">
+                      <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                        <span className="text-white font-bold">~</span>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-yellow-600">{performance.mistakes}</div>
+                        <div className="text-sm text-muted-foreground">Timing Mistakes</div>
+                        <div className="text-xs text-muted-foreground">
+                          {((performance.mistakes / performance.total) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="text-center space-y-4">
+              {(() => {
+                const performance = calculatePerformance();
+                const accuracy = (performance.hits / performance.total) * 100;
+                
+                let message = "";
+                if (accuracy >= 90) {
+                  message = "🌟 Outstanding! Your timing is excellent!";
+                } else if (accuracy >= 75) {
+                  message = "🎯 Great job! Keep practicing to perfect your timing!";
+                } else if (accuracy >= 50) {
+                  message = "👍 Good effort! Focus on listening to the beat!";
+                } else {
+                  message = "🎵 Keep practicing! Every drummer started somewhere!";
+                }
+                
+                return (
+                  <p className="text-lg text-muted-foreground">{message}</p>
+                );
+              })()}
+              
+              <div className="flex gap-4 justify-center">
+                <Button onClick={retryPractice} className="px-6">
+                  🔄 Try Again
+                </Button>
+                <Button variant="outline" onClick={reset} className="px-6">
+                  📝 New Session
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
