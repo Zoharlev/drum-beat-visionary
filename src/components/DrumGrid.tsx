@@ -165,12 +165,13 @@ export const DrumGrid = ({
             transform: `translateX(-${(scrollPosition - startStep) * (100 / visibleSteps)}%)`
           }}
         >
-          {/* Playhead */}
+          {/* Playhead - Changed to 2px wide strong line */}
           <div 
-            className="absolute top-0 bottom-0 w-1 bg-playhead transition-all duration-75 z-10"
+            className="absolute top-0 bottom-0 w-0.5 bg-playhead transition-all duration-75 z-10"
             style={{
               left: `${88 + ((currentStep - startStep) * (100 - 88 / visibleSteps) / visibleSteps)}%`,
-              boxShadow: "0 0 20px hsl(var(--playhead) / 0.6)"
+              width: "2px",
+              boxShadow: "0 0 8px hsl(var(--playhead) / 0.8)"
             }}
           />
 
@@ -218,10 +219,11 @@ export const DrumGrid = ({
                         className={cn(
                           "flex-1 h-12 border-r border-grid-line last:border-r-0 transition-all duration-200",
                           "flex items-center justify-center group-hover:bg-muted/20",
-                          stepIndex === currentStep && "bg-playhead/10",
+                          // Removed background fade effects for current step
                           stepIndex % 4 === 0 && "border-r-2 border-primary/30",
                           isMicMode && "cursor-default",
-                          isCurrentlyActive && "bg-playhead/20 ring-2 ring-playhead/50"
+                          // Removed background fade, kept only ring for active notes
+                          isCurrentlyActive && "ring-2 ring-playhead/50"
                         )}
                       >
                         {active && (
