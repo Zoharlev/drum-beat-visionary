@@ -71,7 +71,7 @@ export const DrumGrid = ({
     // Find the scheduled note that corresponds to this grid step
     const noteTime = stepIndex / 4; // Convert step to time (4 steps per second)
     const scheduledNote = noteResults.find(note => 
-      Math.abs(note.time - noteTime) < 0.125 && note.hit // Within 1/8 second tolerance
+      Math.abs(note.time - noteTime) < 0.125 && note.hit // Only show feedback if microphone actually detected a hit
     );
     
     if (!scheduledNote) return null;
@@ -213,7 +213,7 @@ export const DrumGrid = ({
                                 "w-6 h-6 rounded-full transition-all duration-200 hover:scale-110",
                                 "shadow-note flex items-center justify-center text-xs font-bold",
                                 stepIndex === currentStep && active && "animate-bounce",
-                                // Use feedback color if available, otherwise default purple gradient
+                                // Use feedback color if available (only when microphone detected a hit), otherwise default purple gradient
                                 feedback ? feedback.color : "bg-gradient-to-br from-note-active to-accent text-background"
                               )}
                             >
