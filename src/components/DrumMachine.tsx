@@ -32,33 +32,25 @@ interface PerformanceSummary {
   total: number;
 }
 
-// Generate extended 60-second hi-hat pattern
+// Generate extended 60-second hi-hat pattern - 1 note every 5 seconds
 const generateExtendedPattern = () => {
-  const basePattern = [0.25, 0.73, 1.22, 1.70];
-  const cycleLength = 1.95; // Time for one complete cycle
   const totalDuration = 60; // 60 seconds
+  const noteInterval = 5; // 5 seconds between notes
   const notes: ScheduledNote[] = [];
   
-  let currentTime = 0;
   let stepIndex = 0;
   
-  while (currentTime < totalDuration) {
-    for (let i = 0; i < basePattern.length; i++) {
-      const noteTime = currentTime + basePattern[i];
-      if (noteTime < totalDuration) {
-        notes.push({
-          time: noteTime,
-          instrument: "Hi-Hat",
-          step: stepIndex,
-          hit: false,
-          correct: false,
-          wrongInstrument: false,
-          slightlyOff: false
-        });
-        stepIndex++;
-      }
-    }
-    currentTime += cycleLength;
+  for (let time = 0; time < totalDuration; time += noteInterval) {
+    notes.push({
+      time: time,
+      instrument: "Hi-Hat",
+      step: stepIndex,
+      hit: false,
+      correct: false,
+      wrongInstrument: false,
+      slightlyOff: false
+    });
+    stepIndex++;
   }
   
   return notes;
@@ -79,12 +71,12 @@ export const DrumMachine = () => {
   const [scheduledNotes] = useState<ScheduledNote[]>(generateExtendedPattern());
   const [noteResults, setNoteResults] = useState<ScheduledNote[]>(scheduledNotes);
   
-  // Generate pattern for grid display (show all notes as purple dots)
+  // Generate pattern for grid display (show notes every 20 steps = 5 seconds)
   const [pattern, setPattern] = useState<DrumPattern>(() => {
     const hihatPattern = new Array(Math.ceil(60 * 4)).fill(false); // 4 steps per second for 60 seconds
     
     scheduledNotes.forEach(note => {
-      const gridStep = Math.floor(note.time * 4); // Convert time to grid step
+      const gridStep = Math.floor(note.time * 4); // Convert time to grid step (every 20 steps)
       if (gridStep < hihatPattern.length) {
         hihatPattern[gridStep] = true;
       }
@@ -647,8 +639,8 @@ export const DrumMachine = () => {
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isMicListening 
-              ? "Make any sound at the highlighted times - timing is all that matters!" 
-              : "60-second practice pattern loaded"
+              ? "Make any sound every 5 seconds - timing is all that matters!" 
+              : "60-second practice pattern loaded - 1 note every 5 seconds"
             }
           </p>
           <p className="text-sm text-muted-foreground mt-2">
