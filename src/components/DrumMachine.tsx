@@ -4,6 +4,7 @@ import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff } from "luci
 import { DrumGrid } from "./DrumGrid";
 import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
+import { MicrophoneLevelIndicator } from "./MicrophoneLevelIndicator";
 
 interface DrumPattern {
   [key: string]: boolean[];
@@ -32,6 +33,7 @@ export const DrumMachine = () => {
   const [bpm, setBpm] = useState(120);
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
   const [startTime, setStartTime] = useState<number>(0);
+  const [audioLevel, setAudioLevel] = useState(0);
   
   // Schedule for the specific Hi-Hat pattern
   const [scheduledNotes] = useState<ScheduledNote[]>([
@@ -142,7 +144,8 @@ export const DrumMachine = () => {
 
   const { hasPermission, error, initializeMicrophone } = useMicrophoneDetection({
     isListening: isMicListening,
-    onHitDetected
+    onHitDetected,
+    onAudioLevel: setAudioLevel
   });
 
   // Initialize audio context
@@ -527,6 +530,14 @@ export const DrumMachine = () => {
               )}
               {hasPermission === null ? "Setup Mic" : isMicListening ? "Listening" : "Click Mode"}
             </Button>
+            
+            {/* Microphone Level Indicator */}
+            {hasPermission && (
+              <MicrophoneLevelIndicator 
+                isListening={isMicListening} 
+                audioLevel={audioLevel}
+              />
+            )}
             
             {/* Tempo Controls */}
             <div className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg">

@@ -11,9 +11,10 @@ interface DetectedHit {
 interface UseMicrophoneDetectionProps {
   isListening: boolean;
   onHitDetected: (hit: DetectedHit) => void;
+  onAudioLevel?: (level: number) => void;
 }
 
-export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrophoneDetectionProps) => {
+export const useMicrophoneDetection = ({ isListening, onHitDetected, onAudioLevel }: UseMicrophoneDetectionProps) => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   
@@ -86,14 +87,24 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
     }
     const rms = Math.sqrt(sum / bufferRef.current.length);
     
+    // Send audio level to parent for visual feedback
+    if (onAudioLevel) {
+      onAudioLevel(rms * 10); // Scale for better visualization
+    }
+    
     // More sensitive threshold for testing
-    const threshold = 0.01; // Lowered from 0.02
+    const threshold = 0.008; // Even more sensitive
     const currentTime = Date.now();
     
-    if (rms > threshold && currentTime - lastHitTimeRef.current > 80) { // Reduced debounce from 100ms
+    // Always log the current audio level for debugging
+    if (rms > 0.001) {
+      console.log(`🎤 Audio detected - RMS: ${rms.toFixed(4)} (threshold: ${threshold})`);
+    }
+    
+    if (rms > threshold && currentTime - lastHitTimeRef.current > 80) {
       lastHitTimeRef.current = currentTime;
       
-      console.log(`Hit detected! RMS: ${rms.toFixed(4)}, Time: ${currentTime}`);
+      console.log(`🥁 HIT DETECTED! RMS: ${rms.toFixed(4)}, Time: ${currentTime}`);
       
       // Analyze frequency content for hi-hat classification
       const isHiHat = classifyAsHiHat(frequencyBufferRef.current);
@@ -111,7 +122,7 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
       const sampleRate = audioContextRef.current?.sampleRate || 44100;
       const dominantFrequency = (maxBin * sampleRate) / (2 * frequencyBufferRef.current.length);
       
-      console.log(`Frequency: ${dominantFrequency.toFixed(0)}Hz, Is Hi-Hat: ${isHiHat}`);
+      console.log(`🎵 Frequency: ${dominantFrequency.toFixed(0)}Hz, Is Hi-Hat: ${isHiHat ? '✅' : '❌'}`);
       
       onHitDetected({
         time: currentTime,
