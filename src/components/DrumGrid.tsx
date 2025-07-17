@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Volume2, VolumeX, Check, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -71,27 +70,46 @@ export const DrumGrid = ({
     // Find the scheduled note that corresponds to this grid step
     const noteTime = stepIndex / 4; // Convert step to time (4 steps per second)
     const scheduledNote = noteResults.find(note => 
-      Math.abs(note.time - noteTime) < 0.125 && note.hit // Only show feedback if microphone actually detected a hit
+      Math.abs(note.time - noteTime) < 0.125 // Within 1/8 second tolerance for matching
     );
     
     if (!scheduledNote) return null;
 
-    if (scheduledNote.correct) {
-      return {
-        color: "bg-green-500",
-        icon: <Check className="w-3 h-3 text-white" />
-      };
-    } else if (scheduledNote.slightlyOff) {
-      return {
-        color: "bg-yellow-500",
-        icon: <AlertTriangle className="w-3 h-3 text-white" />
-      };
-    } else {
+    // Define timing windows
+    const timingWindow = 0.15; // ±0.15 seconds for acceptable timing
+    const missedWindow = 0.2; // Consider note "missed" if 0.2 seconds past its time
+    const timePastNote = currentTimeInSeconds - noteTime;
+
+    // If note was hit by microphone, show feedback based on accuracy
+    if (scheduledNote.hit) {
+      if (scheduledNote.correct) {
+        return {
+          color: "bg-green-500",
+          icon: <Check className="w-3 h-3 text-white" />
+        };
+      } else if (scheduledNote.slightlyOff) {
+        return {
+          color: "bg-yellow-500",
+          icon: <AlertTriangle className="w-3 h-3 text-white" />
+        };
+      } else if (scheduledNote.wrongInstrument) {
+        return {
+          color: "bg-red-500",
+          icon: <X className="w-3 h-3 text-white" />
+        };
+      }
+    }
+    
+    // If note was not hit and time has passed the missed window, show as missed
+    if (!scheduledNote.hit && timePastNote > missedWindow) {
       return {
         color: "bg-red-500",
         icon: <X className="w-3 h-3 text-white" />
       };
     }
+
+    // For future notes or notes still within timing window, return null (keep purple)
+    return null;
   };
 
   const getCurrentActiveNote = (drumKey: string, stepIndex: number) => {
@@ -213,7 +231,7 @@ export const DrumGrid = ({
                                 "w-6 h-6 rounded-full transition-all duration-200 hover:scale-110",
                                 "shadow-note flex items-center justify-center text-xs font-bold",
                                 stepIndex === currentStep && active && "animate-bounce",
-                                // Use feedback color if available (only when microphone detected a hit), otherwise default purple gradient
+                                // Use feedback color if available, otherwise default purple gradient
                                 feedback ? feedback.color : "bg-gradient-to-br from-note-active to-accent text-background"
                               )}
                             >
