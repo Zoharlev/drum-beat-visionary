@@ -21,6 +21,7 @@ interface DrumGridProps {
   onMetronomeToggle: () => void;
   noteResults?: ScheduledNote[];
   isMicMode?: boolean;
+  currentTimeInSeconds?: number;
 }
 
 const drumLabels: { [key: string]: { name: string; symbol: string } } = {
@@ -39,18 +40,52 @@ export const DrumGrid = ({
   onMetronomeToggle,
   noteResults = [],
   isMicMode = false,
+  currentTimeInSeconds = 0,
 }: DrumGridProps) => {
   
-  const getStepFeedback = (drumKey: string, stepIndex: number) => {
-    if (!isMicMode) return null;
+  const getCurrentActiveNote = (drumKey: string, stepIndex: number) => {
+    if (!isMicMode || drumKey !== 'hihat') return null;
     
-    const result = noteResults.find(note => 
-      note.step === stepIndex && 
-      drumKey === 'hihat' && 
-      note.instrument === 'Hi-Hat'
-    );
+    // Find the scheduled note for this step
+    const scheduledNote = noteResults.find(note => note.step === stepIndex);
+    if (!scheduledNote) return null;
     
-    return result;
+    // Check if this note is currently active (within timing window)
+    const timingWindow = 0.15; // ±0.15 seconds
+    const timeDiff = Math.abs(currentTimeInSeconds - scheduledNote.time);
+    
+    // Only return feedback if this note is currently in the active timing window
+    if (timeDiff <= timingWindow) {
+      return scheduledNote;
+    }
+    
+    return null;
+  };
+
+  const getNoteFeedbackColor = (drumKey: string, stepIndex: number) => {
+    const activeNote = getCurrentActiveNote(drumKey, stepIndex);
+    if (!activeNote || !activeNote.hit) return null;
+    
+    if (activeNote.correct) {
+      return "bg-green-500";
+    } else if (activeNote.wrongInstrument) {
+      return "bg-yellow-500";
+    } else {
+      return "bg-red-500";
+    }
+  };
+
+  const getNoteFeedbackIcon = (drumKey: string, stepIndex: number) => {
+    const activeNote = getCurrentActiveNote(drumKey, stepIndex);
+    if (!activeNote || !activeNote.hit) return null;
+    
+    if (activeNote.correct) {
+      return <Check className="w-3 h-3 text-white" />;
+    } else if (activeNote.wrongInstrument) {
+      return <AlertTriangle className="w-3 h-3 text-white" />;
+    } else {
+      return <X className="w-3 h-3 text-white" />;
+    }
   };
 
   return (
@@ -131,7 +166,9 @@ export const DrumGrid = ({
               {/* Step Buttons */}
               <div className="flex relative z-10">
                 {pattern[drumKey]?.map((active, stepIndex) => {
-                  const feedback = getStepFeedback(drumKey, stepIndex);
+                  const feedbackColor = getNoteFeedbackColor(drumKey, stepIndex);
+                  const feedbackIcon = getNoteFeedbackIcon(drumKey, stepIndex);
+                  const isCurrentlyActive = getCurrentActiveNote(drumKey, stepIndex) !== null;
                   
                   return (
                     <button
@@ -143,38 +180,23 @@ export const DrumGrid = ({
                         "flex items-center justify-center group-hover:bg-muted/20",
                         stepIndex === currentStep && "bg-playhead/10",
                         stepIndex % 4 === 0 && "border-r-2 border-primary/30",
-                        isMicMode && "cursor-default"
+                        isMicMode && "cursor-default",
+                        isCurrentlyActive && "bg-playhead/20 ring-2 ring-playhead/50"
                       )}
                     >
                       {active && (
                         <div className="relative">
                           <div
                             className={cn(
-                              "w-6 h-6 rounded-full bg-gradient-to-br from-note-active to-accent",
-                              "shadow-note transition-transform duration-200 hover:scale-110",
-                              "flex items-center justify-center text-xs font-bold text-background",
-                              stepIndex === currentStep && active && "animate-bounce"
+                              "w-6 h-6 rounded-full transition-all duration-200 hover:scale-110",
+                              "shadow-note flex items-center justify-center text-xs font-bold",
+                              stepIndex === currentStep && active && "animate-bounce",
+                              // Use feedback color if available, otherwise default purple gradient
+                              feedbackColor || "bg-gradient-to-br from-note-active to-accent text-background"
                             )}
                           >
-                            {symbol}
+                            {feedbackIcon || symbol}
                           </div>
-                          
-                          {/* Feedback indicators */}
-                          {feedback && feedback.hit && (
-                            <div className={cn(
-                              "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center",
-                              feedback.correct ? "bg-green-500" : 
-                              feedback.wrongInstrument ? "bg-yellow-500" : "bg-red-500"
-                            )}>
-                              {feedback.correct ? (
-                                <Check className="w-2 h-2 text-white" />
-                              ) : feedback.wrongInstrument ? (
-                                <AlertTriangle className="w-2 h-2 text-white" />
-                              ) : (
-                                <X className="w-2 h-2 text-white" />
-                              )}
-                            </div>
-                          )}
                         </div>
                       )}
                     </button>

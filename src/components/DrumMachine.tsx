@@ -32,6 +32,7 @@ export const DrumMachine = () => {
   const [bpm, setBpm] = useState(120);
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
   const [startTime, setStartTime] = useState<number>(0);
+  const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
   
   // Schedule for the specific Hi-Hat pattern
   const [scheduledNotes] = useState<ScheduledNote[]>([
@@ -69,16 +70,18 @@ export const DrumMachine = () => {
     }
     
     const currentTime = (Date.now() - startTime) / 1000; // Convert to seconds
-    const timingWindow = 0.15; // Increased to ±0.15 seconds for more forgiveness
+    setCurrentTimeInSeconds(currentTime);
+    
+    const timingWindow = 0.15; // ±0.15 seconds for more forgiveness
     
     console.log(`Hit at ${currentTime.toFixed(2)}s, looking for matches...`);
     
-    // Find if this hit matches any scheduled note
+    // Find if this hit matches any scheduled note within timing window
     let matchingNote = null;
     let closestTimeDiff = Infinity;
     
-    // Find the closest note within the timing window
-    for (const note of scheduledNotes) {
+    // Only consider notes that haven't been hit yet and are within timing window
+    for (const note of noteResults) {
       const timeDiff = Math.abs(currentTime - note.time);
       if (timeDiff <= timingWindow && !note.hit && timeDiff < closestTimeDiff) {
         matchingNote = note;
@@ -89,38 +92,46 @@ export const DrumMachine = () => {
     if (matchingNote) {
       console.log(`Match found for note at ${matchingNote.time}s (diff: ${closestTimeDiff.toFixed(3)}s)`);
       
-      matchingNote.hit = true;
+      // Create updated results array
+      const updatedResults = noteResults.map(note => {
+        if (note === matchingNote) {
+          const updatedNote = { ...note };
+          updatedNote.hit = true;
+          
+          if (hit.isHiHat) {
+            // Correct hit!
+            updatedNote.correct = true;
+            updatedNote.wrongInstrument = false;
+            
+            // Play the hi-hat sound
+            playDrumSound('hihat');
+            
+            toast({
+              title: "Great hit! ✓",
+              description: `Perfect Hi-Hat at ${matchingNote.time}s`,
+            });
+            
+            console.log('Correct hi-hat hit!');
+          } else {
+            // Wrong instrument but correct timing
+            updatedNote.correct = false;
+            updatedNote.wrongInstrument = true;
+            
+            toast({
+              title: "Wrong instrument ⚠️",
+              description: "Try hitting the Hi-Hat - good timing though!",
+              variant: "destructive"
+            });
+            
+            console.log('Wrong instrument but good timing');
+          }
+          
+          return updatedNote;
+        }
+        return note;
+      });
       
-      if (hit.isHiHat) {
-        // Correct hit!
-        matchingNote.correct = true;
-        matchingNote.wrongInstrument = false;
-        
-        // Play the hi-hat sound
-        playDrumSound('hihat');
-        
-        toast({
-          title: "Great hit! ✓",
-          description: `Perfect Hi-Hat at ${matchingNote.time}s`,
-        });
-        
-        console.log('Correct hi-hat hit!');
-      } else {
-        // Wrong instrument but correct timing
-        matchingNote.correct = false;
-        matchingNote.wrongInstrument = true;
-        
-        toast({
-          title: "Wrong instrument ⚠️",
-          description: "Try hitting the Hi-Hat - good timing though!",
-          variant: "destructive"
-        });
-        
-        console.log('Wrong instrument but good timing');
-      }
-      
-      // Update results
-      setNoteResults([...noteResults]);
+      setNoteResults(updatedResults);
     } else {
       // Hit detected but no matching note
       console.log('Hit detected but no matching scheduled note');
@@ -161,6 +172,9 @@ export const DrumMachine = () => {
       intervalRef.current = setInterval(() => {
         setCurrentStep((prev) => {
           const nextStep = (prev + 1) % 16;
+          // Update current time in seconds for timeline tracking
+          const timeElapsed = (Date.now() - startTime) / 1000;
+          setCurrentTimeInSeconds(timeElapsed);
           return nextStep;
         });
       }, stepDuration);
@@ -176,7 +190,7 @@ export const DrumMachine = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isPlaying, stepDuration]);
+  }, [isPlaying, stepDuration, startTime]);
 
   // Play metronome only (no automatic drum sounds)
   useEffect(() => {
@@ -437,6 +451,7 @@ export const DrumMachine = () => {
       setNoteResults(resetNotes);
       setStartTime(Date.now());
       setCurrentStep(0);
+      setCurrentTimeInSeconds(0);
       console.log('Practice started, timer reset');
     }
     
@@ -615,6 +630,7 @@ export const DrumMachine = () => {
           onMetronomeToggle={() => setMetronomeEnabled(!metronomeEnabled)}
           noteResults={noteResults}
           isMicMode={isMicListening}
+          currentTimeInSeconds={currentTimeInSeconds}
         />
       </div>
     </div>
