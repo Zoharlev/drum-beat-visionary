@@ -271,13 +271,13 @@ export const DrumGrid = ({
       <div className="text-center text-sm text-muted-foreground">
         {isMicMode ? (
           <span>
-            🎤 Microphone active • Hit the Hi-Hat at the right time • 
+            🎤 Microphone active • Make any sound at the right time • 
             <span className="text-green-500 mx-2">🟢 Perfect timing</span>
             <span className="text-yellow-500 mx-2">🟡 Slightly off</span>
-            <span className="text-red-500">🔴 Wrong/Missed</span>
+            <span className="text-red-500">🔴 Missed</span>
           </span>
         ) : (
-          "60-second Hi-Hat practice pattern • Yellow line shows current playback position"
+          "60-second practice pattern • Yellow line shows current playback position"
         )}
       </div>
     </div>

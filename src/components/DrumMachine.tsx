@@ -144,22 +144,17 @@ export const DrumMachine = () => {
           const updatedNote = { ...note };
           updatedNote.hit = true;
           
-          if (hit.isHiHat) {
-            if (closestTimeDiff <= perfectWindow) {
-              updatedNote.correct = true;
-              updatedNote.wrongInstrument = false;
-              updatedNote.slightlyOff = false;
-              playDrumSound('hihat');
-            } else {
-              updatedNote.correct = false;
-              updatedNote.wrongInstrument = false;
-              updatedNote.slightlyOff = true;
-              playDrumSound('hihat');
-            }
+          // Base feedback purely on timing accuracy, not sound type
+          if (closestTimeDiff <= perfectWindow) {
+            updatedNote.correct = true;
+            updatedNote.wrongInstrument = false;
+            updatedNote.slightlyOff = false;
+            playDrumSound('hihat');
           } else {
             updatedNote.correct = false;
-            updatedNote.wrongInstrument = true;
-            updatedNote.slightlyOff = false;
+            updatedNote.wrongInstrument = false;
+            updatedNote.slightlyOff = true;
+            playDrumSound('hihat');
           }
           return updatedNote;
         }
@@ -648,7 +643,7 @@ export const DrumMachine = () => {
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isMicListening 
-              ? "Hit the Hi-Hat at the highlighted times - 60 second practice session" 
+              ? "Make any sound at the highlighted times - timing is all that matters!" 
               : "60-second Hi-Hat practice pattern loaded"
             }
           </p>
@@ -689,7 +684,7 @@ export const DrumMachine = () => {
                       </div>
                       <div>
                         <div className="text-2xl font-bold text-green-600">{performance.hits}</div>
-                        <div className="text-sm text-muted-foreground">Perfect Hits</div>
+                        <div className="text-sm text-muted-foreground">Perfect Timing</div>
                         <div className="text-xs text-muted-foreground">
                           {((performance.hits / performance.total) * 100).toFixed(1)}%
                         </div>
@@ -715,7 +710,7 @@ export const DrumMachine = () => {
                       </div>
                       <div>
                         <div className="text-2xl font-bold text-yellow-600">{performance.mistakes}</div>
-                        <div className="text-sm text-muted-foreground">Timing Mistakes</div>
+                        <div className="text-sm text-muted-foreground">Late/Early</div>
                         <div className="text-xs text-muted-foreground">
                           {((performance.mistakes / performance.total) * 100).toFixed(1)}%
                         </div>
