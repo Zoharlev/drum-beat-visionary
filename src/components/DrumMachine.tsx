@@ -1,26 +1,49 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Settings, Plus, Minus } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
 import { useToast } from "@/hooks/use-toast";
+import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
 
 interface DrumPattern {
   [key: string]: boolean[];
 }
 
+interface ScheduledNote {
+  time: number;
+  instrument: string;
+  step: number;
+  hit: boolean;
+  correct: boolean;
+}
+
+interface DetectedHit {
+  time: number;
+  frequency: number;
+  amplitude: number;
+  isHiHat: boolean;
+}
+
 export const DrumMachine = () => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMicListening, setIsMicListening] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [bpm, setBpm] = useState(120);
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
+  const [startTime, setStartTime] = useState<number>(0);
+  
+  // Schedule for the specific Hi-Hat pattern
+  const [scheduledNotes] = useState<ScheduledNote[]>([
+    { time: 0.25, instrument: "Hi-Hat", step: 2, hit: false, correct: false },
+    { time: 0.73, instrument: "Hi-Hat", step: 6, hit: false, correct: false },
+    { time: 1.22, instrument: "Hi-Hat", step: 10, hit: false, correct: false },
+    { time: 1.70, instrument: "Hi-Hat", step: 14, hit: false, correct: false }
+  ]);
+  
+  const [noteResults, setNoteResults] = useState<ScheduledNote[]>(scheduledNotes);
+  
   const [pattern, setPattern] = useState<DrumPattern>(() => {
-    // Initialize with your specific Hi-Hat pattern
-    // Times: 0.25s, 0.73s, 1.22s, 1.7s
-    // Converting to 16-step grid positions based on timing
     const hihatPattern = new Array(16).fill(false);
-    
-    // At 120 BPM, each step is about 0.125s (125ms)
-    // 0.25s ≈ step 2, 0.73s ≈ step 6, 1.22s ≈ step 10, 1.7s ≈ step 14
     hihatPattern[2] = true;  // 0.25s
     hihatPattern[6] = true;  // 0.73s  
     hihatPattern[10] = true; // 1.22s
@@ -37,6 +60,53 @@ export const DrumMachine = () => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const { toast } = useToast();
+
+  const onHitDetected = (hit: DetectedHit) => {
+    if (!isPlaying || !isMicListening) return;
+    
+    const currentTime = (Date.now() - startTime) / 1000; // Convert to seconds
+    const timingWindow = 0.1; // ±0.1 seconds
+    
+    // Find if this hit matches any scheduled note
+    const matchingNote = scheduledNotes.find(note => {
+      const timeDiff = Math.abs(currentTime - note.time);
+      return timeDiff <= timingWindow && !note.hit;
+    });
+    
+    if (matchingNote && hit.isHiHat) {
+      // Correct hit!
+      matchingNote.hit = true;
+      matchingNote.correct = true;
+      
+      // Play the hi-hat sound
+      playDrumSound('hihat');
+      
+      // Update results
+      setNoteResults(prev => [...prev]);
+      
+      toast({
+        title: "Great hit!",
+        description: `Perfect timing on ${matchingNote.instrument}`,
+      });
+    } else if (matchingNote && !hit.isHiHat) {
+      // Wrong instrument
+      matchingNote.hit = true;
+      matchingNote.correct = false;
+      
+      setNoteResults(prev => [...prev]);
+      
+      toast({
+        title: "Wrong instrument",
+        description: "Try hitting the Hi-Hat",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const { hasPermission, error, initializeMicrophone } = useMicrophoneDetection({
+    isListening: isMicListening,
+    onHitDetected
+  });
 
   // Initialize audio context
   useEffect(() => {
@@ -71,22 +141,12 @@ export const DrumMachine = () => {
     };
   }, [isPlaying, stepDuration]);
 
-  // Separate effect for playing sounds based on currentStep
+  // Play metronome only (no automatic drum sounds)
   useEffect(() => {
-    if (isPlaying) {
-      // Play sounds for active notes at current step
-      Object.entries(pattern).forEach(([drum, steps]) => {
-        if (steps[currentStep]) {
-          playDrumSound(drum);
-        }
-      });
-
-      // Play metronome on beat 1
-      if (metronomeEnabled && currentStep % 4 === 0) {
-        playMetronome();
-      }
+    if (isPlaying && metronomeEnabled && currentStep % 4 === 0) {
+      playMetronome();
     }
-  }, [currentStep, isPlaying, pattern, metronomeEnabled]);
+  }, [currentStep, isPlaying, metronomeEnabled]);
 
   const playDrumSound = (drum: string) => {
     if (!audioContextRef.current) return;
@@ -334,11 +394,33 @@ export const DrumMachine = () => {
   };
 
   const togglePlay = () => {
+    if (!isPlaying) {
+      // Reset results when starting
+      setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false })));
+      setStartTime(Date.now());
+      setCurrentStep(0);
+    }
+    
     setIsPlaying(!isPlaying);
+    
     if (!isPlaying) {
       toast({
-        title: "Playing",
-        description: "Drum pattern started",
+        title: "Practice started",
+        description: isMicListening ? "Hit the Hi-Hat at the right time!" : "Enable microphone to practice",
+      });
+    }
+  };
+
+  const toggleMicrophone = async () => {
+    if (!hasPermission) {
+      await initializeMicrophone();
+    }
+    
+    if (hasPermission) {
+      setIsMicListening(!isMicListening);
+      toast({
+        title: isMicListening ? "Microphone disabled" : "Microphone enabled",
+        description: isMicListening ? "Click mode active" : "Ready to detect hits",
       });
     }
   };
@@ -346,6 +428,7 @@ export const DrumMachine = () => {
   const reset = () => {
     setIsPlaying(false);
     setCurrentStep(0);
+    setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false })));
     toast({
       title: "Reset",
       description: "Pattern reset to beginning",
@@ -357,12 +440,15 @@ export const DrumMachine = () => {
   };
 
   const toggleStep = (drum: string, step: number) => {
-    setPattern(prev => ({
-      ...prev,
-      [drum]: prev[drum].map((active, index) => 
-        index === step ? !active : active
-      )
-    }));
+    // Only allow toggling if microphone is not listening (fallback click mode)
+    if (!isMicListening) {
+      setPattern(prev => ({
+        ...prev,
+        [drum]: prev[drum].map((active, index) => 
+          index === step ? !active : active
+        )
+      }));
+    }
   };
 
   const clearPattern = () => {
@@ -372,6 +458,7 @@ export const DrumMachine = () => {
       hihat: new Array(16).fill(false),
       openhat: new Array(16).fill(false),
     });
+    setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false })));
     toast({
       title: "Cleared",
       description: "All patterns cleared",
@@ -386,6 +473,20 @@ export const DrumMachine = () => {
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon">
               <RotateCcw className="h-5 w-5" />
+            </Button>
+            
+            {/* Microphone Control */}
+            <Button
+              variant={isMicListening ? "default" : "outline"}
+              onClick={toggleMicrophone}
+              className="flex items-center gap-2"
+            >
+              {isMicListening ? (
+                <Mic className="h-4 w-4" />
+              ) : (
+                <MicOff className="h-4 w-4" />
+              )}
+              {hasPermission === null ? "Setup Mic" : isMicListening ? "Listening" : "Click Mode"}
             </Button>
             
             {/* Tempo Controls */}
@@ -446,11 +547,23 @@ export const DrumMachine = () => {
           </Button>
         </div>
 
+        {/* Status Messages */}
+        {error && (
+          <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
+            {error}
+          </div>
+        )}
+
         {/* Pattern Instructions */}
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
-            Play the following notes
+            {isMicListening ? "Hit the Hi-Hat at the highlighted times" : "Click on the grid to add or remove notes"}
           </p>
+          {isMicListening && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Practice the Hi-Hat pattern: 0.25s, 0.73s, 1.22s, 1.70s
+            </p>
+          )}
         </div>
 
         {/* Drum Grid */}
@@ -461,6 +574,8 @@ export const DrumMachine = () => {
           onClearPattern={clearPattern}
           metronomeEnabled={metronomeEnabled}
           onMetronomeToggle={() => setMetronomeEnabled(!metronomeEnabled)}
+          noteResults={noteResults}
+          isMicMode={isMicListening}
         />
       </div>
     </div>
