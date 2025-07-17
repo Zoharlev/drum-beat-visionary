@@ -10,6 +10,7 @@ interface ScheduledNote {
   hit: boolean;
   correct: boolean;
   wrongInstrument: boolean;
+  slightlyOff: boolean;
 }
 
 interface DrumGridProps {
@@ -43,6 +44,22 @@ export const DrumGrid = ({
   currentTimeInSeconds = 0,
 }: DrumGridProps) => {
   
+  const getDotFeedback = (drumKey: string, stepIndex: number) => {
+    if (!isMicMode || drumKey !== 'hihat') return null;
+    
+    // Find the scheduled note for this step
+    const scheduledNote = noteResults.find(note => note.step === stepIndex);
+    if (!scheduledNote || !scheduledNote.hit) return null;
+    
+    if (scheduledNote.correct) {
+      return { color: "bg-green-500", icon: <Check className="w-3 h-3 text-white" /> };
+    } else if (scheduledNote.slightlyOff) {
+      return { color: "bg-yellow-500", icon: <AlertTriangle className="w-3 h-3 text-white" /> };
+    } else {
+      return { color: "bg-red-500", icon: <X className="w-3 h-3 text-white" /> };
+    }
+  };
+
   const getCurrentActiveNote = (drumKey: string, stepIndex: number) => {
     if (!isMicMode || drumKey !== 'hihat') return null;
     
@@ -54,38 +71,12 @@ export const DrumGrid = ({
     const timingWindow = 0.15; // ±0.15 seconds
     const timeDiff = Math.abs(currentTimeInSeconds - scheduledNote.time);
     
-    // Only return feedback if this note is currently in the active timing window
+    // Only return active state if this note is currently in the active timing window
     if (timeDiff <= timingWindow) {
       return scheduledNote;
     }
     
     return null;
-  };
-
-  const getNoteFeedbackColor = (drumKey: string, stepIndex: number) => {
-    const activeNote = getCurrentActiveNote(drumKey, stepIndex);
-    if (!activeNote || !activeNote.hit) return null;
-    
-    if (activeNote.correct) {
-      return "bg-green-500";
-    } else if (activeNote.wrongInstrument) {
-      return "bg-yellow-500";
-    } else {
-      return "bg-red-500";
-    }
-  };
-
-  const getNoteFeedbackIcon = (drumKey: string, stepIndex: number) => {
-    const activeNote = getCurrentActiveNote(drumKey, stepIndex);
-    if (!activeNote || !activeNote.hit) return null;
-    
-    if (activeNote.correct) {
-      return <Check className="w-3 h-3 text-white" />;
-    } else if (activeNote.wrongInstrument) {
-      return <AlertTriangle className="w-3 h-3 text-white" />;
-    } else {
-      return <X className="w-3 h-3 text-white" />;
-    }
   };
 
   return (
@@ -166,8 +157,7 @@ export const DrumGrid = ({
               {/* Step Buttons */}
               <div className="flex relative z-10">
                 {pattern[drumKey]?.map((active, stepIndex) => {
-                  const feedbackColor = getNoteFeedbackColor(drumKey, stepIndex);
-                  const feedbackIcon = getNoteFeedbackIcon(drumKey, stepIndex);
+                  const feedback = getDotFeedback(drumKey, stepIndex);
                   const isCurrentlyActive = getCurrentActiveNote(drumKey, stepIndex) !== null;
                   
                   return (
@@ -192,10 +182,10 @@ export const DrumGrid = ({
                               "shadow-note flex items-center justify-center text-xs font-bold",
                               stepIndex === currentStep && active && "animate-bounce",
                               // Use feedback color if available, otherwise default purple gradient
-                              feedbackColor || "bg-gradient-to-br from-note-active to-accent text-background"
+                              feedback ? feedback.color : "bg-gradient-to-br from-note-active to-accent text-background"
                             )}
                           >
-                            {feedbackIcon || symbol}
+                            {feedback ? feedback.icon : symbol}
                           </div>
                         </div>
                       )}
@@ -225,9 +215,9 @@ export const DrumGrid = ({
         {isMicMode ? (
           <span>
             🎤 Microphone active • Hit the Hi-Hat at the right time • 
-            <span className="text-green-500 mx-2">✓ Correct</span>
-            <span className="text-yellow-500 mx-2">⚠ Wrong instrument</span>
-            <span className="text-red-500">✗ Missed</span>
+            <span className="text-green-500 mx-2">🟢 Perfect timing</span>
+            <span className="text-yellow-500 mx-2">🟡 Slightly off</span>
+            <span className="text-red-500">🔴 Wrong/Missed</span>
           </span>
         ) : (
           "Click on the grid to add or remove notes • Yellow line shows current playback position"
