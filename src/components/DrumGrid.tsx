@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { Trash2, Volume2, VolumeX, Check, X } from "lucide-react";
+import { Trash2, Volume2, VolumeX, Check, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ScheduledNote {
@@ -9,6 +9,7 @@ interface ScheduledNote {
   step: number;
   hit: boolean;
   correct: boolean;
+  wrongInstrument: boolean;
 }
 
 interface DrumGridProps {
@@ -162,10 +163,13 @@ export const DrumGrid = ({
                           {feedback && feedback.hit && (
                             <div className={cn(
                               "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center",
-                              feedback.correct ? "bg-green-500" : "bg-red-500"
+                              feedback.correct ? "bg-green-500" : 
+                              feedback.wrongInstrument ? "bg-yellow-500" : "bg-red-500"
                             )}>
                               {feedback.correct ? (
                                 <Check className="w-2 h-2 text-white" />
+                              ) : feedback.wrongInstrument ? (
+                                <AlertTriangle className="w-2 h-2 text-white" />
                               ) : (
                                 <X className="w-2 h-2 text-white" />
                               )}
@@ -200,7 +204,8 @@ export const DrumGrid = ({
           <span>
             🎤 Microphone active • Hit the Hi-Hat at the right time • 
             <span className="text-green-500 mx-2">✓ Correct</span>
-            <span className="text-red-500">✗ Wrong/Missed</span>
+            <span className="text-yellow-500 mx-2">⚠ Wrong instrument</span>
+            <span className="text-red-500">✗ Missed</span>
           </span>
         ) : (
           "Click on the grid to add or remove notes • Yellow line shows current playback position"

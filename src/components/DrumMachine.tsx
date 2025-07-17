@@ -15,6 +15,7 @@ interface ScheduledNote {
   step: number;
   hit: boolean;
   correct: boolean;
+  wrongInstrument: boolean;
 }
 
 interface DetectedHit {
@@ -34,10 +35,10 @@ export const DrumMachine = () => {
   
   // Schedule for the specific Hi-Hat pattern
   const [scheduledNotes] = useState<ScheduledNote[]>([
-    { time: 0.25, instrument: "Hi-Hat", step: 2, hit: false, correct: false },
-    { time: 0.73, instrument: "Hi-Hat", step: 6, hit: false, correct: false },
-    { time: 1.22, instrument: "Hi-Hat", step: 10, hit: false, correct: false },
-    { time: 1.70, instrument: "Hi-Hat", step: 14, hit: false, correct: false }
+    { time: 0.25, instrument: "Hi-Hat", step: 2, hit: false, correct: false, wrongInstrument: false },
+    { time: 0.73, instrument: "Hi-Hat", step: 6, hit: false, correct: false, wrongInstrument: false },
+    { time: 1.22, instrument: "Hi-Hat", step: 10, hit: false, correct: false, wrongInstrument: false },
+    { time: 1.70, instrument: "Hi-Hat", step: 14, hit: false, correct: false, wrongInstrument: false }
   ]);
   
   const [noteResults, setNoteResults] = useState<ScheduledNote[]>(scheduledNotes);
@@ -73,33 +74,35 @@ export const DrumMachine = () => {
       return timeDiff <= timingWindow && !note.hit;
     });
     
-    if (matchingNote && hit.isHiHat) {
-      // Correct hit!
+    if (matchingNote) {
       matchingNote.hit = true;
-      matchingNote.correct = true;
       
-      // Play the hi-hat sound
-      playDrumSound('hihat');
+      if (hit.isHiHat) {
+        // Correct hit!
+        matchingNote.correct = true;
+        matchingNote.wrongInstrument = false;
+        
+        // Play the hi-hat sound
+        playDrumSound('hihat');
+        
+        toast({
+          title: "Great hit!",
+          description: `Perfect timing on ${matchingNote.instrument}`,
+        });
+      } else {
+        // Wrong instrument but correct timing
+        matchingNote.correct = false;
+        matchingNote.wrongInstrument = true;
+        
+        toast({
+          title: "Wrong instrument",
+          description: "Try hitting the Hi-Hat - good timing though!",
+          variant: "destructive"
+        });
+      }
       
       // Update results
       setNoteResults(prev => [...prev]);
-      
-      toast({
-        title: "Great hit!",
-        description: `Perfect timing on ${matchingNote.instrument}`,
-      });
-    } else if (matchingNote && !hit.isHiHat) {
-      // Wrong instrument
-      matchingNote.hit = true;
-      matchingNote.correct = false;
-      
-      setNoteResults(prev => [...prev]);
-      
-      toast({
-        title: "Wrong instrument",
-        description: "Try hitting the Hi-Hat",
-        variant: "destructive"
-      });
     }
   };
 
@@ -396,7 +399,7 @@ export const DrumMachine = () => {
   const togglePlay = () => {
     if (!isPlaying) {
       // Reset results when starting
-      setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false })));
+      setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false, wrongInstrument: false })));
       setStartTime(Date.now());
       setCurrentStep(0);
     }
@@ -428,7 +431,7 @@ export const DrumMachine = () => {
   const reset = () => {
     setIsPlaying(false);
     setCurrentStep(0);
-    setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false })));
+    setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false, wrongInstrument: false })));
     toast({
       title: "Reset",
       description: "Pattern reset to beginning",
@@ -458,7 +461,7 @@ export const DrumMachine = () => {
       hihat: new Array(16).fill(false),
       openhat: new Array(16).fill(false),
     });
-    setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false })));
+    setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false, wrongInstrument: false })));
     toast({
       title: "Cleared",
       description: "All patterns cleared",
