@@ -4,11 +4,9 @@ import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff } from "luci
 import { DrumGrid } from "./DrumGrid";
 import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
-
 interface DrumPattern {
   [key: string]: boolean[];
 }
-
 interface ScheduledNote {
   time: number;
   instrument: string;
@@ -18,14 +16,12 @@ interface ScheduledNote {
   wrongInstrument: boolean;
   slightlyOff: boolean;
 }
-
 interface DetectedHit {
   time: number;
   frequency: number;
   amplitude: number;
   isHiHat: boolean;
 }
-
 export const DrumMachine = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMicListening, setIsMicListening] = useState(false);
@@ -35,65 +31,55 @@ export const DrumMachine = () => {
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
 
-  // Extended Hi-Hat pattern for 60 seconds
-  const generateExtendedSchedule = () => {
-    const basePattern = [0.25, 0.73, 1.22, 1.70];
-    const cycleLength = 1.45; // Each cycle is approximately 1.45 seconds
-    const schedule: ScheduledNote[] = [];
-    let stepCounter = 0;
-    
-    // Generate pattern up to 60 seconds
-    for (let cycle = 0; cycle < Math.floor(60 / cycleLength); cycle++) {
-      const cycleOffset = cycle * cycleLength;
-      
-      basePattern.forEach((time) => {
-        const absoluteTime = time + cycleOffset;
-        if (absoluteTime < 60) { // Only add notes before 60 seconds
-          schedule.push({
-            time: absoluteTime,
-            instrument: "Hi-Hat",
-            step: stepCounter++,
-            hit: false,
-            correct: false,
-            wrongInstrument: false,
-            slightlyOff: false
-          });
-        }
-      });
-    }
-    
-    return schedule;
-  };
-
-  const [scheduledNotes] = useState<ScheduledNote[]>(generateExtendedSchedule());
+  // Schedule for the specific Hi-Hat pattern
+  const [scheduledNotes] = useState<ScheduledNote[]>([{
+    time: 0.25,
+    instrument: "Hi-Hat",
+    step: 2,
+    hit: false,
+    correct: false,
+    wrongInstrument: false,
+    slightlyOff: false
+  }, {
+    time: 0.73,
+    instrument: "Hi-Hat",
+    step: 6,
+    hit: false,
+    correct: false,
+    wrongInstrument: false,
+    slightlyOff: false
+  }, {
+    time: 1.22,
+    instrument: "Hi-Hat",
+    step: 10,
+    hit: false,
+    correct: false,
+    wrongInstrument: false,
+    slightlyOff: false
+  }, {
+    time: 1.70,
+    instrument: "Hi-Hat",
+    step: 14,
+    hit: false,
+    correct: false,
+    wrongInstrument: false,
+    slightlyOff: false
+  }]);
   const [noteResults, setNoteResults] = useState<ScheduledNote[]>(scheduledNotes);
-
-  // Generate grid pattern with extended hi-hat notes
-  const generateExtendedPattern = () => {
-    // Calculate total steps needed for 60 seconds at 120 BPM
-    const totalSteps = Math.ceil((60 * bpm) / 60 * 4); // 16th notes for 60 seconds
-    
-    const hihatPattern = new Array(totalSteps).fill(false);
-    
-    // Mark steps where hi-hat notes should appear
-    scheduledNotes.forEach((note) => {
-      // Convert time to step index (16th notes)
-      const stepIndex = Math.round((note.time * bpm * 4) / 60);
-      if (stepIndex < totalSteps) {
-        hihatPattern[stepIndex] = true;
-      }
-    });
+  const [pattern, setPattern] = useState<DrumPattern>(() => {
+    const hihatPattern = new Array(16).fill(false);
+    hihatPattern[2] = true; // 0.25s
+    hihatPattern[6] = true; // 0.73s  
+    hihatPattern[10] = true; // 1.22s
+    hihatPattern[14] = true; // 1.7s
 
     return {
-      kick: new Array(totalSteps).fill(false),
-      snare: new Array(totalSteps).fill(false),
+      kick: new Array(16).fill(false),
+      snare: new Array(16).fill(false),
       hihat: hihatPattern,
-      openhat: new Array(totalSteps).fill(false)
+      openhat: new Array(16).fill(false)
     };
-  };
-
-  const [pattern, setPattern] = useState<DrumPattern>(generateExtendedPattern());
-
+  });
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const {
@@ -142,7 +128,7 @@ export const DrumMachine = () => {
               playDrumSound('hihat');
               toast({
                 title: "Perfect hit! 🟢",
-                description: `Excellent timing at ${matchingNote.time.toFixed(2)}s`
+                description: `Excellent timing at ${matchingNote.time}s`
               });
               console.log('Perfect hi-hat hit!');
             } else {
@@ -192,7 +178,6 @@ export const DrumMachine = () => {
       }
     }
   };
-
   const {
     hasPermission,
     error,
@@ -202,6 +187,7 @@ export const DrumMachine = () => {
     onHitDetected
   });
 
+  // Initialize audio context
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     return () => {
@@ -216,8 +202,7 @@ export const DrumMachine = () => {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
         setCurrentStep(prev => {
-          const totalSteps = pattern.hihat.length;
-          const nextStep = (prev + 1) % totalSteps;
+          const nextStep = (prev + 1) % 16;
           // Update current time in seconds for timeline tracking
           const timeElapsed = (Date.now() - startTime) / 1000;
           setCurrentTimeInSeconds(timeElapsed);
@@ -235,7 +220,7 @@ export const DrumMachine = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isPlaying, stepDuration, startTime, pattern.hihat.length]);
+  }, [isPlaying, stepDuration, startTime]);
 
   // Play metronome only (no automatic drum sounds)
   useEffect(() => {
@@ -478,7 +463,7 @@ export const DrumMachine = () => {
     if (!isPlaying) {
       toast({
         title: "Practice started",
-        description: isMicListening ? "Hit the Hi-Hat at the right time for 60 seconds!" : "Enable microphone to practice"
+        description: isMicListening ? "Hit the Hi-Hat at the right time!" : "Enable microphone to practice"
       });
     }
   };
@@ -490,7 +475,7 @@ export const DrumMachine = () => {
       setIsMicListening(!isMicListening);
       toast({
         title: isMicListening ? "Microphone disabled" : "Microphone enabled",
-        description: isMicListening ? "Click mode active" : "Ready to detect hits for 60-second practice"
+        description: isMicListening ? "Click mode active" : "Ready to detect hits"
       });
     }
   };
@@ -506,7 +491,7 @@ export const DrumMachine = () => {
     })));
     toast({
       title: "Reset",
-      description: "60-second practice sequence reset"
+      description: "Pattern reset to beginning"
     });
   };
   const changeBpm = (delta: number) => {
@@ -522,8 +507,12 @@ export const DrumMachine = () => {
     }
   };
   const clearPattern = () => {
-    const newPattern = generateExtendedPattern();
-    setPattern(newPattern);
+    setPattern({
+      kick: new Array(16).fill(false),
+      snare: new Array(16).fill(false),
+      hihat: new Array(16).fill(false),
+      openhat: new Array(16).fill(false)
+    });
     setNoteResults(scheduledNotes.map(note => ({
       ...note,
       hit: false,
@@ -532,8 +521,8 @@ export const DrumMachine = () => {
       slightlyOff: false
     })));
     toast({
-      title: "Reset",
-      description: "60-second Hi-Hat practice pattern restored"
+      title: "Cleared",
+      description: "All patterns cleared"
     });
   };
   return <div className="min-h-screen bg-background p-6">
@@ -545,11 +534,13 @@ export const DrumMachine = () => {
               <RotateCcw className="h-5 w-5" />
             </Button>
             
+            {/* Microphone Control */}
             <Button variant={isMicListening ? "default" : "outline"} onClick={toggleMicrophone} className="flex items-center gap-2">
               {isMicListening ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
               {hasPermission === null ? "Setup Mic" : isMicListening ? "Listening" : "Click Mode"}
             </Button>
             
+            {/* Tempo Controls */}
             <div className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg">
               <Button variant="ghost" size="icon" onClick={() => changeBpm(-5)} className="h-8 w-8">
                 <Minus className="h-4 w-4" />
@@ -568,6 +559,7 @@ export const DrumMachine = () => {
               </Button>
             </div>
 
+            {/* Play Controls */}
             <Button variant="ghost" size="icon" onClick={togglePlay} className="h-12 w-12 bg-primary/10 hover:bg-primary/20">
               {isPlaying ? <Pause className="h-6 w-6 text-primary" /> : <Play className="h-6 w-6 text-primary" />}
             </Button>
@@ -590,11 +582,10 @@ export const DrumMachine = () => {
         {/* Pattern Instructions */}
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
-            {isMicListening ? "60-Second Hi-Hat Practice - Hit the purple dots at the right time!" : "Click on the grid to add or remove notes"}
+            {isMicListening ? "Hit the Hi-Hat at the highlighted times" : "Click on the grid to add or remove notes"}
           </p>
           {isMicListening && <p className="text-sm text-muted-foreground mt-2">
-              Complete practice sequence: {scheduledNotes.length} Hi-Hat hits over 60 seconds
-            </p>}
+        </p>}
         </div>
 
         {/* Drum Grid */}
