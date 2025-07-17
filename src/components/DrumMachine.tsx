@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, RefreshCw } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
 
@@ -510,6 +510,33 @@ export const DrumMachine = () => {
     togglePlay();
   };
 
+  const restartPractice = () => {
+    // Stop current practice and reset everything
+    setIsPlaying(false);
+    setCurrentStep(0);
+    setCurrentTimeInSeconds(0);
+    setScrollPosition(0);
+    setShowSummary(false);
+    
+    // Reset note results
+    const resetNotes = scheduledNotes.map(note => ({
+      ...note,
+      hit: false,
+      correct: false,
+      wrongInstrument: false,
+      slightlyOff: false
+    }));
+    setNoteResults(resetNotes);
+    
+    // Start immediately
+    setTimeout(() => {
+      const now = Date.now();
+      setStartTime(now);
+      setIsPlaying(true);
+      console.log('Practice restarted - playhead at step 1');
+    }, 50); // Small delay to ensure state is updated
+  };
+
   const changeBpm = (delta: number) => {
     setBpm(prev => Math.max(60, Math.min(200, prev + delta)));
   };
@@ -591,6 +618,17 @@ export const DrumMachine = () => {
 
             <Button variant="ghost" size="icon" onClick={reset} className="h-12 w-12">
               <RotateCcw className="h-5 w-5" />
+            </Button>
+
+            {/* Retry Button */}
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={restartPractice} 
+              className="h-12 w-12"
+              title="Restart Practice"
+            >
+              <RefreshCw className="h-5 w-5" />
             </Button>
           </div>
 
