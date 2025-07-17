@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DrumGrid } from "./DrumGrid";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
 
@@ -74,6 +75,11 @@ export const DrumMachine = () => {
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  
+  // Countdown state
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownValue, setCountdownValue] = useState(3);
+  const [isCountingDown, setIsCountingDown] = useState(false);
 
   // Extended pattern for 60 seconds
   const [scheduledNotes] = useState<ScheduledNote[]>(generateExtendedPattern());
@@ -100,6 +106,7 @@ export const DrumMachine = () => {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const countdownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const calculatePerformance = (): PerformanceSummary => {
     const hits = noteResults.filter(note => note.correct).length;
@@ -185,6 +192,28 @@ export const DrumMachine = () => {
       audioContextRef.current?.close();
     };
   }, []);
+
+  // Countdown effect
+  useEffect(() => {
+    if (showCountdown && isCountingDown) {
+      if (countdownValue > 0) {
+        countdownTimeoutRef.current = setTimeout(() => {
+          setCountdownValue(prev => prev - 1);
+        }, 1000);
+      } else {
+        // Countdown finished, start the actual practice
+        setShowCountdown(false);
+        setIsCountingDown(false);
+        startActualPractice();
+      }
+    }
+
+    return () => {
+      if (countdownTimeoutRef.current) {
+        clearTimeout(countdownTimeoutRef.current);
+      }
+    };
+  }, [showCountdown, isCountingDown, countdownValue]);
 
   // Timeline and scroll management
   const stepDuration = 60 / bpm / 4 * 1000; // 16th notes
@@ -449,24 +478,44 @@ export const DrumMachine = () => {
     oscillator.stop(context.currentTime + 0.05);
   };
 
+  const startCountdown = () => {
+    setShowCountdown(true);
+    setIsCountingDown(true);
+    setCountdownValue(3);
+  };
+
+  const startActualPractice = () => {
+    const resetNotes = scheduledNotes.map(note => ({
+      ...note,
+      hit: false,
+      correct: false,
+      wrongInstrument: false,
+      slightlyOff: false
+    }));
+    setNoteResults(resetNotes);
+    setStartTime(Date.now());
+    setCurrentStep(0);
+    setCurrentTimeInSeconds(0);
+    setScrollPosition(0);
+    setShowSummary(false);
+    setIsPlaying(true);
+    console.log('60-second practice started');
+  };
+
   const togglePlay = () => {
-    if (!isPlaying) {
-      const resetNotes = scheduledNotes.map(note => ({
-        ...note,
-        hit: false,
-        correct: false,
-        wrongInstrument: false,
-        slightlyOff: false
-      }));
-      setNoteResults(resetNotes);
-      setStartTime(Date.now());
-      setCurrentStep(0);
-      setCurrentTimeInSeconds(0);
-      setScrollPosition(0);
-      setShowSummary(false);
-      console.log('60-second practice started');
+    if (!isPlaying && !isCountingDown) {
+      // Start countdown instead of immediate practice
+      startCountdown();
+    } else {
+      // Stop practice
+      setIsPlaying(false);
+      if (isCountingDown) {
+        // Cancel countdown if it's running
+        setShowCountdown(false);
+        setIsCountingDown(false);
+        setCountdownValue(3);
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const toggleMicrophone = async () => {
@@ -528,9 +577,33 @@ export const DrumMachine = () => {
     })));
   };
 
+  const getCountdownColor = () => {
+    switch (countdownValue) {
+      case 3: return "text-red-500";
+      case 2: return "text-yellow-500";
+      case 1: return "text-green-500";
+      default: return "text-blue-500";
+    }
+  };
+
+  const getCountdownText = () => {
+    return countdownValue > 0 ? countdownValue.toString() : "GO!";
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto">
+        {/* Countdown Dialog */}
+        <Dialog open={showCountdown} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-md border-none bg-black/80 backdrop-blur-sm">
+            <div className="flex items-center justify-center p-8">
+              <div className={`text-8xl font-bold ${getCountdownColor()} animate-scale-in`}>
+                {getCountdownText()}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Header Controls */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -573,8 +646,9 @@ export const DrumMachine = () => {
               size="icon"
               onClick={togglePlay}
               className="h-12 w-12 bg-primary/10 hover:bg-primary/20"
+              disabled={isCountingDown}
             >
-              {isPlaying ? <Pause className="h-6 w-6 text-primary" /> : <Play className="h-6 w-6 text-primary" />}
+              {isPlaying || isCountingDown ? <Pause className="h-6 w-6 text-primary" /> : <Play className="h-6 w-6 text-primary" />}
             </Button>
 
             <Button variant="ghost" size="icon" onClick={reset} className="h-12 w-12">
@@ -597,9 +671,11 @@ export const DrumMachine = () => {
         {/* Pattern Instructions */}
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
-            {isMicListening 
-              ? "Hit the Hi-Hat at the highlighted times - 60 second practice session" 
-              : "60-second Hi-Hat practice pattern loaded"
+            {isCountingDown 
+              ? "Get ready..." 
+              : isMicListening 
+                ? "Hit the Hi-Hat at the highlighted times - 60 second practice session" 
+                : "60-second Hi-Hat practice pattern loaded"
             }
           </p>
           <p className="text-sm text-muted-foreground mt-2">
