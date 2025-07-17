@@ -133,12 +133,17 @@ export const DrumGrid = ({
 
   // Calculate visible range based on scroll position
   const visibleSteps = 32; // Show 32 steps at a time (8 seconds at 4 steps/second)
+  const totalSteps = pattern.hihat?.length || 240; // Total steps in the 60-second pattern
   const startStep = Math.max(0, scrollPosition);
-  const endStep = Math.min(pattern.hihat?.length || 0, startStep + visibleSteps);
+  const endStep = Math.min(totalSteps, startStep + visibleSteps);
   const visibleStepIndices = Array.from(
     { length: endStep - startStep }, 
     (_, i) => i + startStep
   );
+
+  // Timeline-like playhead positioning
+  const playheadPosition = Math.min((currentStep / totalSteps) * 100, 100);
+  const containerScrollOffset = (scrollPosition / totalSteps) * 100;
 
   return (
     <div className="space-y-6">
@@ -162,14 +167,14 @@ export const DrumGrid = ({
         <div 
           className="transition-transform duration-200 ease-out"
           style={{
-            transform: `translateX(-${(scrollPosition - startStep) * (100 / visibleSteps)}%)`
+            transform: `translateX(-${containerScrollOffset}%)`
           }}
         >
-          {/* Playhead - Changed to 2px wide strong line */}
+          {/* Timeline Playhead - Moves linearly across entire timeline */}
           <div 
             className="absolute top-0 bottom-0 w-0.5 bg-playhead transition-all duration-75 z-10"
             style={{
-              left: `${88 + ((currentStep - startStep) * (100 - 88 / visibleSteps) / visibleSteps)}%`,
+              left: `${88 + (playheadPosition * (100 - 88) / 100)}%`,
               width: "2px",
               boxShadow: "0 0 8px hsl(var(--playhead) / 0.8)"
             }}

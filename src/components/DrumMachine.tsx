@@ -181,8 +181,10 @@ export const DrumMachine = () => {
     };
   }, []);
 
-  // Timeline and scroll management
+  // Timeline and scroll management - Updated for smooth timeline behavior
   const stepDuration = 60 / bpm / 4 * 1000; // 16th notes
+  const totalSteps = 240; // 60 seconds * 4 steps per second
+  const visibleSteps = 32; // Steps visible at once
 
   useEffect(() => {
     if (isPlaying) {
@@ -199,9 +201,11 @@ export const DrumMachine = () => {
         const newStep = Math.floor(timeElapsed * 4); // 4 steps per second
         setCurrentStep(newStep);
         
-        // Auto-scroll: keep current position slightly ahead of center
-        const scrollOffset = Math.max(0, newStep - 8); // Keep 8 steps visible before current
-        setScrollPosition(scrollOffset);
+        // Timeline-style scrolling: scroll to keep playhead in center-right of viewport
+        const centerOffset = visibleSteps * 0.75; // Keep playhead at 75% of visible area
+        const targetScrollPosition = Math.max(0, newStep - centerOffset);
+        const maxScrollPosition = Math.max(0, totalSteps - visibleSteps);
+        setScrollPosition(Math.min(targetScrollPosition, maxScrollPosition));
         
         // Stop at 60 seconds and show summary
         if (timeElapsed >= 60) {
@@ -210,7 +214,7 @@ export const DrumMachine = () => {
             setShowSummary(true);
           }
         }
-      }, stepDuration / 4); // Update more frequently for smooth scroll
+      }, stepDuration / 4); // Update more frequently for smooth movement
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -223,7 +227,7 @@ export const DrumMachine = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isPlaying, stepDuration, startTime, isMicListening]);
+  }, [isPlaying, stepDuration, startTime, isMicListening, visibleSteps, totalSteps]);
 
   // Play metronome
   useEffect(() => {
@@ -467,7 +471,7 @@ export const DrumMachine = () => {
       setCurrentTimeInSeconds(0);
       setScrollPosition(0);
       setShowSummary(false);
-      console.log('60-second practice started - playhead at step 1');
+      console.log('60-second practice started - timeline playhead at beginning');
     }
     setIsPlaying(!isPlaying);
   };
@@ -644,11 +648,11 @@ export const DrumMachine = () => {
           <p className="text-muted-foreground text-lg">
             {isMicListening 
               ? "Make any sound at the highlighted times - timing is all that matters!" 
-              : "60-second Hi-Hat practice pattern loaded"
+              : "60-second practice pattern loaded"
             }
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            Time: {currentTimeInSeconds.toFixed(1)}s / 60.0s
+            Time: {currentTimeInSeconds.toFixed(1)}s / 60.0s • Timeline Progress: {((currentStep / totalSteps) * 100).toFixed(1)}%
           </p>
         </div>
 
