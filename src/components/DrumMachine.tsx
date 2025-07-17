@@ -191,11 +191,16 @@ export const DrumMachine = () => {
 
   useEffect(() => {
     if (isPlaying) {
+      // Immediately set the first step and time when starting
+      setCurrentStep(0);
+      setCurrentTimeInSeconds(0);
+      setScrollPosition(0);
+      
       intervalRef.current = setInterval(() => {
         const timeElapsed = (Date.now() - startTime) / 1000;
         setCurrentTimeInSeconds(timeElapsed);
         
-        // Calculate current step based on time
+        // Calculate current step based on time - ensure it starts from 0
         const newStep = Math.floor(timeElapsed * 4); // 4 steps per second
         setCurrentStep(newStep);
         
@@ -459,12 +464,15 @@ export const DrumMachine = () => {
         slightlyOff: false
       }));
       setNoteResults(resetNotes);
-      setStartTime(Date.now());
-      setCurrentStep(0);
+      
+      // Set timing immediately and precisely
+      const now = Date.now();
+      setStartTime(now);
+      setCurrentStep(0); // Start immediately at step 1 (index 0)
       setCurrentTimeInSeconds(0);
       setScrollPosition(0);
       setShowSummary(false);
-      console.log('60-second practice started');
+      console.log('60-second practice started - playhead at step 1');
     }
     setIsPlaying(!isPlaying);
   };
@@ -480,7 +488,7 @@ export const DrumMachine = () => {
 
   const reset = () => {
     setIsPlaying(false);
-    setCurrentStep(0);
+    setCurrentStep(0); // Reset to step 1 (index 0)
     setCurrentTimeInSeconds(0);
     setScrollPosition(0);
     setShowSummary(false);
@@ -495,6 +503,10 @@ export const DrumMachine = () => {
 
   const retryPractice = () => {
     setShowSummary(false);
+    // Reset timing variables before starting again
+    setCurrentStep(0);
+    setCurrentTimeInSeconds(0);
+    setScrollPosition(0);
     togglePlay();
   };
 
