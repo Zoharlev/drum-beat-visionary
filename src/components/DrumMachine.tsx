@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
-import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
 
 interface DrumPattern {
@@ -93,7 +92,6 @@ export const DrumMachine = () => {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const { toast } = useToast();
 
   const onHitDetected = (hit: DetectedHit) => {
     if (!isPlaying || !isMicListening) {
@@ -135,29 +133,16 @@ export const DrumMachine = () => {
               updatedNote.wrongInstrument = false;
               updatedNote.slightlyOff = false;
               playDrumSound('hihat');
-              toast({
-                title: "Perfect hit! 🟢",
-                description: `Excellent timing at ${matchingNote.time.toFixed(2)}s`
-              });
             } else {
               updatedNote.correct = false;
               updatedNote.wrongInstrument = false;
               updatedNote.slightlyOff = true;
               playDrumSound('hihat');
-              toast({
-                title: "Good hit! 🟡",
-                description: "Slightly off timing but close!"
-              });
             }
           } else {
             updatedNote.correct = false;
             updatedNote.wrongInstrument = true;
             updatedNote.slightlyOff = false;
-            toast({
-              title: "Wrong instrument 🔴",
-              description: "Try hitting the Hi-Hat - good timing though!",
-              variant: "destructive"
-            });
           }
           return updatedNote;
         }
@@ -166,21 +151,8 @@ export const DrumMachine = () => {
       
       setNoteResults(updatedResults);
     } else {
-      // Hit detected but no matching note
+      // Hit detected but no matching note - no notification needed
       console.log('Hit detected but no matching scheduled note');
-
-      // Show feedback for any hit outside the timing windows
-      if (hit.isHiHat) {
-        toast({
-          title: "Hi-Hat detected",
-          description: "Try to hit exactly on the highlighted beats"
-        });
-      } else {
-        toast({
-          title: "Hit detected",
-          description: "Focus on the Hi-Hat at the right timing"
-        });
-      }
     }
   };
 
@@ -217,10 +189,6 @@ export const DrumMachine = () => {
         // Stop at 60 seconds
         if (timeElapsed >= 60) {
           setIsPlaying(false);
-          toast({
-            title: "Practice complete!",
-            description: "60-second session finished"
-          });
         }
       }, stepDuration / 4); // Update more frequently for smooth scroll
     } else {
@@ -478,12 +446,6 @@ export const DrumMachine = () => {
       console.log('60-second practice started');
     }
     setIsPlaying(!isPlaying);
-    if (!isPlaying) {
-      toast({
-        title: "Practice started",
-        description: isMicListening ? "Hit the Hi-Hat at the right time!" : "Enable microphone to practice"
-      });
-    }
   };
 
   const toggleMicrophone = async () => {
@@ -492,10 +454,6 @@ export const DrumMachine = () => {
     }
     if (hasPermission) {
       setIsMicListening(!isMicListening);
-      toast({
-        title: isMicListening ? "Microphone disabled" : "Microphone enabled",
-        description: isMicListening ? "Click mode active" : "Ready to detect hits"
-      });
     }
   };
 
@@ -511,10 +469,6 @@ export const DrumMachine = () => {
       wrongInstrument: false,
       slightlyOff: false
     })));
-    toast({
-      title: "Reset",
-      description: "60-second pattern reset"
-    });
   };
 
   const changeBpm = (delta: number) => {
@@ -545,10 +499,6 @@ export const DrumMachine = () => {
       wrongInstrument: false,
       slightlyOff: false
     })));
-    toast({
-      title: "Cleared",
-      description: "All patterns cleared"
-    });
   };
 
   return (
