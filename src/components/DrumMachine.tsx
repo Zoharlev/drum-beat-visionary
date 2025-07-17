@@ -63,18 +63,32 @@ export const DrumMachine = () => {
   const { toast } = useToast();
 
   const onHitDetected = (hit: DetectedHit) => {
-    if (!isPlaying || !isMicListening) return;
+    if (!isPlaying || !isMicListening) {
+      console.log('Hit detected but not in listening mode');
+      return;
+    }
     
     const currentTime = (Date.now() - startTime) / 1000; // Convert to seconds
-    const timingWindow = 0.1; // ±0.1 seconds
+    const timingWindow = 0.15; // Increased to ±0.15 seconds for more forgiveness
+    
+    console.log(`Hit at ${currentTime.toFixed(2)}s, looking for matches...`);
     
     // Find if this hit matches any scheduled note
-    const matchingNote = scheduledNotes.find(note => {
+    let matchingNote = null;
+    let closestTimeDiff = Infinity;
+    
+    // Find the closest note within the timing window
+    for (const note of scheduledNotes) {
       const timeDiff = Math.abs(currentTime - note.time);
-      return timeDiff <= timingWindow && !note.hit;
-    });
+      if (timeDiff <= timingWindow && !note.hit && timeDiff < closestTimeDiff) {
+        matchingNote = note;
+        closestTimeDiff = timeDiff;
+      }
+    }
     
     if (matchingNote) {
+      console.log(`Match found for note at ${matchingNote.time}s (diff: ${closestTimeDiff.toFixed(3)}s)`);
+      
       matchingNote.hit = true;
       
       if (hit.isHiHat) {
@@ -86,23 +100,43 @@ export const DrumMachine = () => {
         playDrumSound('hihat');
         
         toast({
-          title: "Great hit!",
-          description: `Perfect timing on ${matchingNote.instrument}`,
+          title: "Great hit! ✓",
+          description: `Perfect Hi-Hat at ${matchingNote.time}s`,
         });
+        
+        console.log('Correct hi-hat hit!');
       } else {
         // Wrong instrument but correct timing
         matchingNote.correct = false;
         matchingNote.wrongInstrument = true;
         
         toast({
-          title: "Wrong instrument",
+          title: "Wrong instrument ⚠️",
           description: "Try hitting the Hi-Hat - good timing though!",
           variant: "destructive"
         });
+        
+        console.log('Wrong instrument but good timing');
       }
       
       // Update results
-      setNoteResults(prev => [...prev]);
+      setNoteResults([...noteResults]);
+    } else {
+      // Hit detected but no matching note
+      console.log('Hit detected but no matching scheduled note');
+      
+      // Show feedback for any hit outside the timing windows
+      if (hit.isHiHat) {
+        toast({
+          title: "Hi-Hat detected",
+          description: "Try to hit exactly on the highlighted beats",
+        });
+      } else {
+        toast({
+          title: "Hit detected",
+          description: "Focus on the Hi-Hat at the right timing",
+        });
+      }
     }
   };
 
@@ -399,9 +433,11 @@ export const DrumMachine = () => {
   const togglePlay = () => {
     if (!isPlaying) {
       // Reset results when starting
-      setNoteResults(scheduledNotes.map(note => ({ ...note, hit: false, correct: false, wrongInstrument: false })));
+      const resetNotes = scheduledNotes.map(note => ({ ...note, hit: false, correct: false, wrongInstrument: false }));
+      setNoteResults(resetNotes);
       setStartTime(Date.now());
       setCurrentStep(0);
+      console.log('Practice started, timer reset');
     }
     
     setIsPlaying(!isPlaying);

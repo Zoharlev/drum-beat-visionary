@@ -1,3 +1,4 @@
+
 import { useRef, useEffect, useState } from 'react';
 
 interface DetectedHit {
@@ -29,6 +30,7 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
   const initializeMicrophone = async () => {
     try {
       setError(null);
+      console.log('Requesting microphone access...');
       
       // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -41,6 +43,7 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
       
       streamRef.current = stream;
       setHasPermission(true);
+      console.log('Microphone access granted');
       
       // Create audio context and analyser
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -57,6 +60,8 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
       // Initialize buffers
       bufferRef.current = new Float32Array(analyserRef.current.fftSize);
       frequencyBufferRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+      
+      console.log('Audio analysis setup complete');
       
     } catch (err) {
       console.error('Microphone access denied:', err);
@@ -81,12 +86,14 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
     }
     const rms = Math.sqrt(sum / bufferRef.current.length);
     
-    // Detect percussive hit based on amplitude threshold
-    const threshold = 0.02; // Adjust based on testing
+    // More sensitive threshold for testing
+    const threshold = 0.01; // Lowered from 0.02
     const currentTime = Date.now();
     
-    if (rms > threshold && currentTime - lastHitTimeRef.current > 100) { // 100ms debounce
+    if (rms > threshold && currentTime - lastHitTimeRef.current > 80) { // Reduced debounce from 100ms
       lastHitTimeRef.current = currentTime;
+      
+      console.log(`Hit detected! RMS: ${rms.toFixed(4)}, Time: ${currentTime}`);
       
       // Analyze frequency content for hi-hat classification
       const isHiHat = classifyAsHiHat(frequencyBufferRef.current);
@@ -104,6 +111,8 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
       const sampleRate = audioContextRef.current?.sampleRate || 44100;
       const dominantFrequency = (maxBin * sampleRate) / (2 * frequencyBufferRef.current.length);
       
+      console.log(`Frequency: ${dominantFrequency.toFixed(0)}Hz, Is Hi-Hat: ${isHiHat}`);
+      
       onHitDetected({
         time: currentTime,
         frequency: dominantFrequency,
@@ -114,12 +123,12 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
   };
 
   const classifyAsHiHat = (frequencyData: Uint8Array): boolean => {
-    // Hi-hat classification based on frequency characteristics
-    // Hi-hats typically have strong high-frequency content (8kHz+)
+    // More lenient hi-hat classification
     const sampleRate = audioContextRef.current?.sampleRate || 44100;
     const binSize = sampleRate / (2 * frequencyData.length);
     
     let highFreqEnergy = 0;
+    let midFreqEnergy = 0;
     let totalEnergy = 0;
     
     for (let i = 0; i < frequencyData.length; i++) {
@@ -128,19 +137,32 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
       
       totalEnergy += energy;
       
-      // Count energy in high frequency range (6kHz - 15kHz) typical for hi-hats
-      if (frequency >= 6000 && frequency <= 15000) {
+      // High frequency range (4kHz - 15kHz) for hi-hats
+      if (frequency >= 4000 && frequency <= 15000) {
         highFreqEnergy += energy;
+      }
+      
+      // Mid frequency range (1kHz - 4kHz)
+      if (frequency >= 1000 && frequency <= 4000) {
+        midFreqEnergy += energy;
       }
     }
     
-    // If more than 40% of energy is in high frequencies, classify as hi-hat
+    // More lenient classification - if more than 25% of energy is in high frequencies
     const highFreqRatio = totalEnergy > 0 ? highFreqEnergy / totalEnergy : 0;
-    return highFreqRatio > 0.4;
+    const midFreqRatio = totalEnergy > 0 ? midFreqEnergy / totalEnergy : 0;
+    
+    console.log(`High freq ratio: ${highFreqRatio.toFixed(3)}, Mid freq ratio: ${midFreqRatio.toFixed(3)}`);
+    
+    // Consider it a hi-hat if it has significant high frequency content
+    // or if it's a sharp, percussive sound with mid-to-high frequency content
+    return highFreqRatio > 0.25 || (highFreqRatio > 0.15 && midFreqRatio > 0.3);
   };
 
   const startListening = () => {
     if (!analyserRef.current) return;
+    
+    console.log('Starting microphone listening...');
     
     const analyze = () => {
       detectPercussiveHit();
@@ -155,6 +177,7 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    console.log('Stopped microphone listening');
   };
 
   useEffect(() => {
