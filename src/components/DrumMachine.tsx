@@ -44,7 +44,7 @@ export const DrumMachine = () => {
   const [isMicListening, setIsMicListening] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [previewStep, setPreviewStep] = useState(0);
-  const [bpm, setBpm] = useState(80);
+  const [bpm, setBpm] = useState(60);
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
