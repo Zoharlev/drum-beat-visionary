@@ -49,6 +49,7 @@ export const DrumMachine = () => {
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
   const [completedNotesCount, setCompletedNotesCount] = useState(0);
+  const [sessionCompleted, setSessionCompleted] = useState(false);
 
   // Timing feedback states
   const [lastHitTiming, setLastHitTiming] = useState<number | null>(null);
@@ -126,9 +127,10 @@ export const DrumMachine = () => {
     setNoteResults(newScheduledNotes.map(note => ({ ...note })));
   }, [pattern, bpm]);
 
-  // Auto-stop after 8 notes
-  const checkAutoStop = () => {
-    if (completedNotesCount >= 8) {
+  // Auto-stop after 8 notes - now accepts count parameter
+  const checkAutoStop = (currentCount: number) => {
+    if (currentCount >= 8 && !sessionCompleted) {
+      setSessionCompleted(true); // Prevent multiple stops
       setIsPlaying(false);
       
       if (isRecording) {
@@ -168,11 +170,10 @@ export const DrumMachine = () => {
       return newStats;
     });
     
-    // Increment completed notes and check for auto-stop
+    // Increment completed notes and check for auto-stop with new count
     setCompletedNotesCount(prev => {
       const newCount = prev + 1;
-      // Use setTimeout to ensure state updates are processed
-      setTimeout(() => checkAutoStop(), 0);
+      checkAutoStop(newCount); // Pass the new count directly
       return newCount;
     });
   };
@@ -341,7 +342,7 @@ export const DrumMachine = () => {
 
   // Monitor for missed beats
   useEffect(() => {
-    if (isPlaying) {
+    if (isPlaying && !sessionCompleted) {
       missedBeatIntervalRef.current = setInterval(() => {
         const currentTime = (Date.now() - startTime) / 1000;
         
@@ -367,7 +368,7 @@ export const DrumMachine = () => {
           
           setNoteResults(updatedResults);
           
-          // Update stats for missed beats
+          // Update stats for missed beats - each missed note counts toward completion
           missedNotes.forEach(() => {
             updateTimingStats('miss');
           });
@@ -388,7 +389,7 @@ export const DrumMachine = () => {
         clearInterval(missedBeatIntervalRef.current);
       }
     };
-  }, [isPlaying, noteResults, startTime, completedNotesCount]);
+  }, [isPlaying, noteResults, startTime, sessionCompleted]);
 
   const {
     hasPermission,
@@ -717,6 +718,7 @@ export const DrumMachine = () => {
       setLastHitTiming(null);
       setLastHitAccuracy(null);
       setCompletedNotesCount(0);
+      setSessionCompleted(false);
       setTimingStats({
         perfectHits: 0,
         goodHits: 0,
@@ -741,7 +743,7 @@ export const DrumMachine = () => {
     if (!isPlaying) {
       toast({
         title: "Practice started",
-        description: "Hit 4 notes to complete the session!"
+        description: "Hit 8 notes to complete the session!"
       });
     }
   };
@@ -791,6 +793,7 @@ export const DrumMachine = () => {
           setLastHitTiming(null);
           setLastHitAccuracy(null);
           setCompletedNotesCount(0);
+          setSessionCompleted(false);
           setTimingStats({
             perfectHits: 0,
             goodHits: 0,
@@ -805,7 +808,7 @@ export const DrumMachine = () => {
         startRecording();
         toast({
           title: "Recording started",
-          description: "Auto-started playback - hit 4 notes to complete!"
+          description: "Auto-started playback - hit 8 notes to complete!"
         });
       } else {
         toast({
@@ -834,6 +837,7 @@ export const DrumMachine = () => {
     setCurrentStep(0);
     setPreviewStep(0);
     setShowSessionSummary(false);
+    setSessionCompleted(false);
     
     // Reset all timing data
     const resetNotes = generateScheduledNotes(pattern, bpm);
@@ -908,6 +912,7 @@ export const DrumMachine = () => {
     setLastHitTiming(null);
     setLastHitAccuracy(null);
     setCompletedNotesCount(0);
+    setSessionCompleted(false);
     setTimingStats({
       perfectHits: 0,
       goodHits: 0,
