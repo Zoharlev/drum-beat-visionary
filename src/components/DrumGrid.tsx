@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Volume2, VolumeX, Check, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
 interface ScheduledNote {
   time: number;
   instrument: string;
@@ -10,6 +11,7 @@ interface ScheduledNote {
   wrongInstrument: boolean;
   slightlyOff: boolean;
 }
+
 interface DrumGridProps {
   pattern: {
     [key: string]: boolean[];
@@ -24,6 +26,7 @@ interface DrumGridProps {
   currentTimeInSeconds?: number;
   scrollPosition?: number;
 }
+
 const drumLabels: {
   [key: string]: {
     name: string;
@@ -47,6 +50,7 @@ const drumLabels: {
     symbol: "◎"
   }
 };
+
 export const DrumGrid = ({
   pattern,
   currentStep,
@@ -104,6 +108,7 @@ export const DrumGrid = ({
     // For future notes or notes still within timing window, return null (keep purple)
     return null;
   };
+
   const getCurrentActiveNote = (drumKey: string, stepIndex: number) => {
     if (!isMicMode || drumKey !== 'hihat') return null;
 
@@ -133,6 +138,12 @@ export const DrumGrid = ({
   // Timeline-like playhead positioning
   const playheadPosition = Math.min(currentStep / totalSteps * 100, 100);
   const containerScrollOffset = scrollPosition / totalSteps * 100;
+
+  // Calculate static yellow guideline position (at 2nd measure = 8 seconds = 32 steps)
+  const guidelineStep = 32; // 8 seconds * 4 steps per second
+  const isGuidelineVisible = guidelineStep >= startStep && guidelineStep <= endStep;
+  const guidelinePosition = isGuidelineVisible ? ((guidelineStep - startStep) / visibleSteps) * 100 : -100;
+
   return <div className="space-y-6">
       {/* Controls */}
       <div className="flex items-center justify-between">
@@ -150,8 +161,15 @@ export const DrumGrid = ({
         <div className="transition-transform duration-200 ease-out" style={{
         transform: `translateX(-${containerScrollOffset}%)`
       }}>
-          {/* Timeline Playhead - Moves linearly across entire timeline */}
-          
+          {/* Static Yellow Guideline at 2nd Measure */}
+          {isGuidelineVisible && (
+            <div 
+              className="absolute top-0 bottom-0 w-1 bg-yellow-400 z-20 opacity-80"
+              style={{
+                left: `calc(88px + ${guidelinePosition}% * (100% - 88px) / 100%)`
+              }}
+            />
+          )}
 
           {/* Beat Numbers */}
           <div className="flex mb-4">
@@ -183,12 +201,12 @@ export const DrumGrid = ({
                 const feedback = getDotFeedback(drumKey, stepIndex);
                 const isCurrentlyActive = getCurrentActiveNote(drumKey, stepIndex) !== null;
                 return <button key={stepIndex} onClick={() => onStepToggle(drumKey, stepIndex)} disabled={isMicMode} className={cn("flex-1 h-12 border-r border-grid-line last:border-r-0 transition-all duration-200", "flex items-center justify-center group-hover:bg-muted/20",
-                // Removed background fade effects for current step
                 stepIndex % 4 === 0 && "border-r-2 border-primary/30", isMicMode && "cursor-default",
                 // Removed background fade, kept only ring for active notes
                 isCurrentlyActive && "ring-2 ring-playhead/50")}>
                         {active && <div className="relative">
-                            <div className={cn("w-6 h-6 rounded-full transition-all duration-200 hover:scale-110", "shadow-note flex items-center justify-center text-xs font-bold", stepIndex === currentStep && active && "animate-bounce",
+                            <div className={cn("w-6 h-6 rounded-full transition-all duration-200 hover:scale-110", "shadow-note flex items-center justify-center text-xs font-bold",
+                    // Removed bounce animation to keep notes static
                     // Use feedback color if available, otherwise default purple gradient
                     feedback ? feedback.color : "bg-gradient-to-br from-note-active to-accent text-background")}>
                               {feedback ? feedback.icon : symbol}
@@ -217,7 +235,8 @@ export const DrumGrid = ({
             <span className="text-green-500 mx-2">🟢 Perfect timing</span>
             <span className="text-yellow-500 mx-2">🟡 Slightly off</span>
             <span className="text-red-500">🔴 Missed</span>
-          </span> : "60-second practice pattern • Yellow line shows current playback position"}
+            <span className="text-yellow-400 mx-2">📏 Yellow line = timing guide</span>
+          </span> : "60-second practice pattern • Yellow line shows timing guide at 2nd measure"}
       </div>
     </div>;
 };

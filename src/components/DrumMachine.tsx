@@ -32,77 +32,73 @@ interface PerformanceSummary {
   total: number;
 }
 
-// Generate a full song with all instruments - 60-second drum arrangement
+// Generate a simpler song with half the notes - 60-second drum arrangement
 const generateFullSongPattern = () => {
   const totalDuration = 60; // 60 seconds
   const notes: ScheduledNote[] = [];
   let stepIndex = 0;
 
-  // Song structure with 4 steps per second (240 total steps)
-  const beatsPerSecond = 4;
+  // Song structure with 2 steps per second (120 total steps) - reduced from 4 steps/second
+  const beatsPerSecond = 2;
   
-  // Create drum patterns for different sections
+  // Create drum patterns for different sections with 8th note intervals (0.5s)
   const createPattern = (startTime: number, endTime: number, patternType: string) => {
-    for (let time = startTime; time < endTime; time += 0.25) { // 16th note intervals
-      const beat = ((time - startTime) % 1) * 4; // Beat within measure (0-4)
-      const measure = Math.floor((time - startTime) / 1); // Which measure
+    for (let time = startTime; time < endTime; time += 0.5) { // 8th note intervals instead of 16th
+      const beat = ((time - startTime) % 2) * 2; // Beat within measure (0-2)
+      const measure = Math.floor((time - startTime) / 2); // Which measure
       
       switch (patternType) {
         case 'intro': // Simple pattern (0-8s)
-          // Kick on 1 and 3
-          if (beat === 0 || beat === 2) {
+          // Kick on 1 and 3 (every measure)
+          if (beat === 0) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
-          // Hi-hat on every 8th note
-          if (beat % 0.5 === 0) {
+          // Hi-hat on every beat
+          if (beat % 1 === 0) {
             notes.push({ time, instrument: 'hihat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
           break;
           
         case 'verse': // Standard rock beat (8-24s, 40-56s)
-          // Kick on 1 and 3, with some syncopation
-          if (beat === 0 || beat === 2 || (measure % 4 === 3 && beat === 3.5)) {
+          // Kick on 1 and 3
+          if (beat === 0 || (beat === 1 && measure % 2 === 0)) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
-          // Snare on 2 and 4
-          if (beat === 1 || beat === 3) {
+          // Snare on 2 and 4 (simplified)
+          if (beat === 0.5 || beat === 1.5) {
             notes.push({ time, instrument: 'snare', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
-          // Hi-hat on every 8th note
+          // Hi-hat on every beat
           if (beat % 0.5 === 0) {
             notes.push({ time, instrument: 'hihat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
-          }
-          // Open hat accents every 2 measures on the "and" of 4
-          if (measure % 2 === 1 && beat === 3.5) {
-            notes.push({ time, instrument: 'openhat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
           break;
           
         case 'chorus': // More complex pattern (24-40s)
-          // Kick with more syncopation
-          if (beat === 0 || beat === 2.5 || (beat === 1.5 && measure % 2 === 1)) {
+          // Kick with some variation
+          if (beat === 0 || (beat === 1 && measure % 4 === 1)) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
-          // Snare on 2 and 4, plus ghost notes
-          if (beat === 1 || beat === 3 || (beat === 1.25 && measure % 4 === 2)) {
+          // Snare on backbeat
+          if (beat === 0.5 || beat === 1.5) {
             notes.push({ time, instrument: 'snare', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
-          // 16th note hi-hat pattern
-          if (beat % 0.25 === 0) {
+          // Hi-hat pattern
+          if (beat % 0.5 === 0) {
             notes.push({ time, instrument: 'hihat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
-          // Open hat on off-beats
-          if (beat === 0.5 || beat === 2.5 || (measure % 4 === 3 && beat === 3.75)) {
+          // Open hat accents occasionally
+          if (measure % 4 === 2 && beat === 1) {
             notes.push({ time, instrument: 'openhat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
           break;
           
         case 'outro': // Simple ending (56-60s)
           // Just kick and hi-hat
-          if (beat === 0 || beat === 2) {
+          if (beat === 0) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
-          if (beat % 1 === 0) { // Quarter notes
+          if (beat % 1 === 0) { // Every beat
             notes.push({ time, instrument: 'hihat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
           }
           break;
@@ -110,28 +106,23 @@ const generateFullSongPattern = () => {
     }
   };
 
-  // Build the song structure
+  // Build the simplified song structure
   createPattern(0, 8, 'intro');      // 0-8s: Intro
   createPattern(8, 24, 'verse');     // 8-24s: Verse 1
   createPattern(24, 40, 'chorus');   // 24-40s: Chorus
   createPattern(40, 56, 'verse');    // 40-56s: Verse 2
   createPattern(56, 60, 'outro');    // 56-60s: Outro
 
-  // Add some fill patterns at measure transitions
-  const fillTimes = [7.5, 23.5, 39.5, 55.5]; // End of each section
+  // Add simple fills at section transitions (much simpler)
+  const fillTimes = [7.5, 23.5, 39.5, 55.5];
   fillTimes.forEach(time => {
     if (time < 60) {
-      // Quick snare fill
-      for (let i = 0; i < 4; i++) {
-        const fillTime = time + (i * 0.125); // 32nd notes
-        if (fillTime < 60) {
-          notes.push({ time: fillTime, instrument: 'snare', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
-        }
-      }
+      // Just a single snare hit
+      notes.push({ time, instrument: 'snare', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
     }
   });
 
-  console.log(`Generated ${notes.length} notes for full song pattern`);
+  console.log(`Generated ${notes.length} notes for simplified song pattern`);
   return notes;
 };
 
