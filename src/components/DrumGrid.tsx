@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Volume2, VolumeX, Check, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
 interface ScheduledNote {
   time: number;
   instrument: string;
@@ -10,6 +11,7 @@ interface ScheduledNote {
   wrongInstrument: boolean;
   slightlyOff: boolean;
 }
+
 interface DrumGridProps {
   pattern: {
     [key: string]: boolean[];
@@ -24,6 +26,7 @@ interface DrumGridProps {
   currentTimeInSeconds?: number;
   scrollPosition?: number;
 }
+
 const drumLabels: {
   [key: string]: {
     name: string;
@@ -47,6 +50,7 @@ const drumLabels: {
     symbol: "◎"
   }
 };
+
 export const DrumGrid = ({
   pattern,
   currentStep,
@@ -64,8 +68,10 @@ export const DrumGrid = ({
 
     // Find the scheduled note that corresponds to this grid step
     const noteTime = stepIndex / 4; // Convert step to time (4 steps per second)
-    const scheduledNote = noteResults.find(note => Math.abs(note.time - noteTime) < 0.125 // Within 1/8 second tolerance for matching
+    const scheduledNote = noteResults.find(note => 
+      Math.abs(note.time - noteTime) < 0.125 // Within 1/8 second tolerance for matching
     );
+
     if (!scheduledNote) return null;
 
     // Define timing windows
@@ -104,6 +110,7 @@ export const DrumGrid = ({
     // For future notes or notes still within timing window, return null (keep purple)
     return null;
   };
+
   const getCurrentActiveNote = (drumKey: string, stepIndex: number) => {
     if (!isMicMode || drumKey !== 'hihat') return null;
 
@@ -113,8 +120,10 @@ export const DrumGrid = ({
     const timeDiff = Math.abs(currentTimeInSeconds - noteTime);
 
     // Find if there's a scheduled note at this time
-    const scheduledNote = noteResults.find(note => Math.abs(note.time - noteTime) < 0.125 // Within 1/8 second tolerance
+    const scheduledNote = noteResults.find(note => 
+      Math.abs(note.time - noteTime) < 0.125 // Within 1/8 second tolerance
     );
+
     if (scheduledNote && timeDiff <= timingWindow) {
       return scheduledNote;
     }
@@ -126,18 +135,22 @@ export const DrumGrid = ({
   const totalSteps = pattern.hihat?.length || 240; // Total steps in the 60-second pattern
   const startStep = Math.max(0, scrollPosition);
   const endStep = Math.min(totalSteps, startStep + visibleSteps);
-  const visibleStepIndices = Array.from({
-    length: endStep - startStep
-  }, (_, i) => i + startStep);
+  const visibleStepIndices = Array.from({ length: endStep - startStep }, (_, i) => i + startStep);
 
-  // Timeline-like playhead positioning
-  const playheadPosition = Math.min(currentStep / totalSteps * 100, 100);
-  const containerScrollOffset = scrollPosition / totalSteps * 100;
-  return <div className="space-y-6">
+  // Calculate playhead position within the visible area
+  const playheadPositionInVisible = currentStep - scrollPosition;
+  const playheadPercentage = (playheadPositionInVisible / visibleSteps) * 100;
+
+  return (
+    <div className="space-y-6">
       {/* Controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant={metronomeEnabled ? "default" : "outline"} onClick={onMetronomeToggle} className="flex items-center gap-2">
+          <Button
+            variant={metronomeEnabled ? "default" : "outline"}
+            onClick={onMetronomeToggle}
+            className="flex items-center gap-2"
+          >
             {metronomeEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             Metronome
           </Button>
@@ -146,78 +159,116 @@ export const DrumGrid = ({
 
       {/* Grid Container */}
       <div className="relative bg-card rounded-lg p-6 shadow-elevated overflow-hidden">
-        {/* Scrollable Grid */}
-        <div className="transition-transform duration-200 ease-out" style={{
-        transform: `translateX(-${containerScrollOffset}%)`
-      }}>
-          {/* Timeline Playhead - Moves linearly across entire timeline */}
-          
+        {/* Yellow Playhead Line */}
+        {playheadPositionInVisible >= 0 && playheadPositionInVisible <= visibleSteps && (
+          <div
+            className="absolute top-6 bottom-6 w-0.5 bg-yellow-400 z-20 transition-all duration-100 ease-linear"
+            style={{
+              left: `calc(5rem + ${playheadPercentage}%)`
+            }}
+          />
+        )}
 
-          {/* Beat Numbers */}
-          <div className="flex mb-4">
-            <div className="w-20"></div>
-            {visibleStepIndices.map(stepIndex => <div key={stepIndex} className={cn("flex-1 text-center text-sm font-mono", stepIndex % 4 === 0 ? "text-primary font-bold" : "text-muted-foreground")}>
-                {stepIndex % 4 === 0 ? Math.floor(stepIndex / 4) : ""}
-              </div>)}
-          </div>
+        {/* Beat Numbers */}
+        <div className="flex mb-4">
+          <div className="w-20"></div>
+          {visibleStepIndices.map(stepIndex => (
+            <div
+              key={stepIndex}
+              className={cn(
+                "flex-1 text-center text-sm font-mono",
+                stepIndex % 4 === 0 ? "text-primary font-bold" : "text-muted-foreground"
+              )}
+            >
+              {stepIndex % 4 === 0 ? Math.floor(stepIndex / 4) : ""}
+            </div>
+          ))}
+        </div>
 
-          {/* Drum Rows */}
-          {Object.entries(drumLabels).map(([drumKey, {
-          name,
-          symbol
-        }]) => <div key={drumKey} className="flex items-center mb-3 group">
-              {/* Drum Label */}
-              <div className="w-20 flex items-center gap-2 pr-4">
-                <span className="text-lg font-mono text-accent">{symbol}</span>
-                <span className="text-sm font-medium text-foreground">{name}</span>
+        {/* Drum Rows */}
+        {Object.entries(drumLabels).map(([drumKey, { name, symbol }]) => (
+          <div key={drumKey} className="flex items-center mb-3 group">
+            {/* Drum Label */}
+            <div className="w-20 flex items-center gap-2 pr-4">
+              <span className="text-lg font-mono text-accent">{symbol}</span>
+              <span className="text-sm font-medium text-foreground">{name}</span>
+            </div>
+
+            {/* Grid Line */}
+            <div className="flex-1 relative">
+              <div className="absolute inset-0 border-t border-grid-line"></div>
+              
+              {/* Step Buttons */}
+              <div className="flex relative z-10">
+                {visibleStepIndices.map(stepIndex => {
+                  const active = pattern[drumKey]?.[stepIndex] || false;
+                  const feedback = getDotFeedback(drumKey, stepIndex);
+                  const isCurrentlyActive = getCurrentActiveNote(drumKey, stepIndex) !== null;
+
+                  return (
+                    <button
+                      key={stepIndex}
+                      onClick={() => onStepToggle(drumKey, stepIndex)}
+                      disabled={isMicMode}
+                      className={cn(
+                        "flex-1 h-12 border-r border-grid-line last:border-r-0 transition-all duration-200",
+                        "flex items-center justify-center group-hover:bg-muted/20",
+                        stepIndex % 4 === 0 && "border-r-2 border-primary/30",
+                        isMicMode && "cursor-default",
+                        isCurrentlyActive && "ring-2 ring-playhead/50"
+                      )}
+                    >
+                      {active && (
+                        <div className="relative">
+                          <div
+                            className={cn(
+                              "w-6 h-6 rounded-full transition-all duration-200 hover:scale-110",
+                              "shadow-note flex items-center justify-center text-xs font-bold",
+                              stepIndex === currentStep && active && "animate-bounce",
+                              // Use feedback color if available, otherwise default purple gradient
+                              feedback ? feedback.color : "bg-gradient-to-br from-note-active to-accent text-background"
+                            )}
+                          >
+                            {feedback ? feedback.icon : symbol}
+                          </div>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-
-              {/* Grid Line */}
-              <div className="flex-1 relative">
-                <div className="absolute inset-0 border-t border-grid-line"></div>
-                
-                {/* Step Buttons */}
-                <div className="flex relative z-10">
-                  {visibleStepIndices.map(stepIndex => {
-                const active = pattern[drumKey]?.[stepIndex] || false;
-                const feedback = getDotFeedback(drumKey, stepIndex);
-                const isCurrentlyActive = getCurrentActiveNote(drumKey, stepIndex) !== null;
-                return <button key={stepIndex} onClick={() => onStepToggle(drumKey, stepIndex)} disabled={isMicMode} className={cn("flex-1 h-12 border-r border-grid-line last:border-r-0 transition-all duration-200", "flex items-center justify-center group-hover:bg-muted/20",
-                // Removed background fade effects for current step
-                stepIndex % 4 === 0 && "border-r-2 border-primary/30", isMicMode && "cursor-default",
-                // Removed background fade, kept only ring for active notes
-                isCurrentlyActive && "ring-2 ring-playhead/50")}>
-                        {active && <div className="relative">
-                            <div className={cn("w-6 h-6 rounded-full transition-all duration-200 hover:scale-110", "shadow-note flex items-center justify-center text-xs font-bold", stepIndex === currentStep && active && "animate-bounce",
-                    // Use feedback color if available, otherwise default purple gradient
-                    feedback ? feedback.color : "bg-gradient-to-br from-note-active to-accent text-background")}>
-                              {feedback ? feedback.icon : symbol}
-                            </div>
-                          </div>}
-                      </button>;
-              })}
-                </div>
-              </div>
-            </div>)}
-
-          {/* Grid Enhancement */}
-          <div className="absolute inset-6 pointer-events-none">
-            {/* Vertical beat lines */}
-            {visibleStepIndices.filter((_, i) => i % 4 === 0).map((stepIndex, i) => <div key={stepIndex} className="absolute top-0 bottom-0 border-l border-primary/20" style={{
-            left: `${88 + i * (100 - 88 / visibleSteps) / (visibleSteps / 4)}%`
-          }} />)}
+            </div>
           </div>
+        ))}
+
+        {/* Grid Enhancement */}
+        <div className="absolute inset-6 pointer-events-none">
+          {/* Vertical beat lines */}
+          {visibleStepIndices.filter((_, i) => i % 4 === 0).map((stepIndex, i) => (
+            <div
+              key={stepIndex}
+              className="absolute top-0 bottom-0 border-l border-primary/20"
+              style={{
+                left: `${88 + (i * (100 - 88 / visibleSteps)) / (visibleSteps / 4)}%`
+              }}
+            />
+          ))}
         </div>
       </div>
 
       {/* Pattern Info */}
       <div className="text-center text-sm text-muted-foreground">
-        {isMicMode ? <span>
+        {isMicMode ? (
+          <span>
             🎤 Microphone active • Make any sound at the right time • 
             <span className="text-green-500 mx-2">🟢 Perfect timing</span>
             <span className="text-yellow-500 mx-2">🟡 Slightly off</span>
             <span className="text-red-500">🔴 Missed</span>
-          </span> : "60-second practice pattern • Yellow line shows current playback position"}
+          </span>
+        ) : (
+          "60-second practice pattern • Yellow line shows current playback position"
+        )}
       </div>
-    </div>;
+    </div>
+  );
 };
