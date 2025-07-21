@@ -6,6 +6,7 @@ import { TimingFeedback } from "./TimingFeedback";
 import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
+import { SessionSummary } from "./SessionSummary";
 
 interface DrumPattern {
   [key: string]: boolean[];
@@ -82,6 +83,11 @@ export const DrumMachine = () => {
   const missedBeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const { toast } = useToast();
+
+  // Add new session-related state
+  const [showSessionSummary, setShowSessionSummary] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState<number>(0);
+  const [sessionDuration, setSessionDuration] = useState<number>(0);
 
   // Generate scheduled notes from pattern
   const generateScheduledNotes = (pattern: DrumPattern, bpm: number) => {
@@ -668,7 +674,9 @@ export const DrumMachine = () => {
       const resetNotes = generateScheduledNotes(pattern, bpm);
       setNoteResults(resetNotes);
       setScheduledNotes(resetNotes);
-      setStartTime(Date.now());
+      const currentTime = Date.now();
+      setStartTime(currentTime);
+      setSessionStartTime(currentTime);
       setCurrentStep(0);
       setCurrentTimeInSeconds(0);
       setLastHitTiming(null);
@@ -682,6 +690,15 @@ export const DrumMachine = () => {
         bestStreak: 0
       });
       console.log('Practice started, timer reset');
+    } else {
+      // Calculate session duration when stopping
+      const duration = (Date.now() - sessionStartTime) / 1000;
+      setSessionDuration(duration);
+      
+      // Show summary if session was meaningful (more than 10 seconds and had some hits)
+      if (duration > 10 && timingStats.totalHits > 0) {
+        setShowSessionSummary(true);
+      }
     }
     setIsPlaying(!isPlaying);
     
@@ -709,16 +726,49 @@ export const DrumMachine = () => {
   const toggleRecording = () => {
     if (isRecording) {
       stopRecording();
+      
+      // Calculate session duration and show summary
+      const duration = (Date.now() - sessionStartTime) / 1000;
+      setSessionDuration(duration);
+      
+      if (duration > 10 && timingStats.totalHits > 0) {
+        setShowSessionSummary(true);
+      }
+      
       toast({
         title: "Recording stopped",
         description: "Audio saved - ready to download"
       });
     } else {
       if (canRecord) {
+        // Auto-start playback when recording begins
+        if (!isPlaying) {
+          // Reset timing feedback and results for fresh session
+          const resetNotes = generateScheduledNotes(pattern, bpm);
+          setNoteResults(resetNotes);
+          setScheduledNotes(resetNotes);
+          const currentTime = Date.now();
+          setStartTime(currentTime);
+          setSessionStartTime(currentTime);
+          setCurrentStep(0);
+          setCurrentTimeInSeconds(0);
+          setLastHitTiming(null);
+          setLastHitAccuracy(null);
+          setTimingStats({
+            perfectHits: 0,
+            goodHits: 0,
+            missedHits: 0,
+            totalHits: 0,
+            currentStreak: 0,
+            bestStreak: 0
+          });
+          setIsPlaying(true);
+        }
+        
         startRecording();
         toast({
           title: "Recording started",
-          description: "Capturing audio with timing feedback"
+          description: "Auto-started playback with timing feedback"
         });
       } else {
         toast({
@@ -731,10 +781,22 @@ export const DrumMachine = () => {
   };
 
   const reset = () => {
+    // Don't interrupt active recording
+    if (isRecording) {
+      toast({
+        title: "Cannot reset",
+        description: "Stop recording first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Comprehensive reset
     setIsPlaying(false);
     setIsPreviewPlaying(false);
     setCurrentStep(0);
     setPreviewStep(0);
+    setShowSessionSummary(false);
     
     // Reset all timing data
     const resetNotes = generateScheduledNotes(pattern, bpm);
@@ -750,10 +812,11 @@ export const DrumMachine = () => {
       currentStreak: 0,
       bestStreak: 0
     });
+    setSessionDuration(0);
     
     toast({
-      title: "Reset",
-      description: "Pattern and timing feedback reset"
+      title: "Reset complete",
+      description: "All progress and feedback cleared"
     });
   };
 
@@ -794,6 +857,43 @@ export const DrumMachine = () => {
       title: "Cleared",
       description: "All patterns cleared"
     });
+  };
+
+  // Session summary handlers
+  const handlePlayAgain = () => {
+    setShowSessionSummary(false);
+    // Reset for new session but keep the pattern
+    const resetNotes = generateScheduledNotes(pattern, bpm);
+    setNoteResults(resetNotes);
+    setScheduledNotes(resetNotes);
+    setLastHitTiming(null);
+    setLastHitAccuracy(null);
+    setTimingStats({
+      perfectHits: 0,
+      goodHits: 0,
+      missedHits: 0,
+      totalHits: 0,
+      currentStreak: 0,
+      bestStreak: 0
+    });
+    
+    // Auto-start playback
+    const currentTime = Date.now();
+    setStartTime(currentTime);
+    setSessionStartTime(currentTime);
+    setCurrentStep(0);
+    setCurrentTimeInSeconds(0);
+    setIsPlaying(true);
+    
+    toast({
+      title: "New session started",
+      description: "Practice the same pattern again!"
+    });
+  };
+
+  const handleNewPattern = () => {
+    setShowSessionSummary(false);
+    reset(); // Use the comprehensive reset
   };
 
   // Calculate next beat time for anticipation
@@ -976,6 +1076,16 @@ export const DrumMachine = () => {
           noteResults={noteResults} 
           isMicMode={isMicListening} 
           currentTimeInSeconds={currentTimeInSeconds} 
+        />
+
+        {/* Session Summary Modal */}
+        <SessionSummary
+          stats={timingStats}
+          sessionDuration={sessionDuration}
+          isVisible={showSessionSummary}
+          onClose={() => setShowSessionSummary(false)}
+          onPlayAgain={handlePlayAgain}
+          onReset={handleNewPattern}
         />
       </div>
     </div>
