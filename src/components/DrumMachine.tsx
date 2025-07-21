@@ -530,9 +530,7 @@ export const DrumMachine = () => {
         {/* Header Controls */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon">
-              <RotateCcw className="h-5 w-5" />
-            </Button>
+            
             
             {/* Microphone Control */}
             <Button variant={isMicListening ? "default" : "outline"} onClick={toggleMicrophone} className="flex items-center gap-2">
