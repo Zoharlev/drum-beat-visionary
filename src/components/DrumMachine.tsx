@@ -32,24 +32,24 @@ interface PerformanceSummary {
   total: number;
 }
 
-// Generate a simpler song with notes starting from 8 seconds (after the guideline)
+// Generate a simpler song with notes starting from time 0
 const generateFullSongPattern = () => {
-  const totalDuration = 60; // 60 seconds
+  const totalDuration = 52; // Reduced to 52 seconds to match new structure
   const notes: ScheduledNote[] = [];
   let stepIndex = 0;
 
-  // Song structure with 2 steps per second (120 total steps) - starting from 8 seconds
+  // Song structure with 2 steps per second - starting from 0 seconds
   const beatsPerSecond = 2;
   
   // Create drum patterns for different sections with 8th note intervals (0.5s)
-  // Starting all patterns from 8 seconds (after the yellow guideline)
+  // All patterns now start from 0 seconds
   const createPattern = (startTime: number, endTime: number, patternType: string) => {
     for (let time = startTime; time < endTime; time += 0.5) { // 8th note intervals instead of 16th
       const beat = ((time - startTime) % 2) * 2; // Beat within measure (0-2)
       const measure = Math.floor((time - startTime) / 2); // Which measure
       
       switch (patternType) {
-        case 'verse': // Standard rock beat (8-24s, 40-56s)
+        case 'verse': // Standard rock beat (0-16s, 32-48s)
           // Kick on 1 and 3
           if (beat === 0 || (beat === 1 && measure % 2 === 0)) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
@@ -64,7 +64,7 @@ const generateFullSongPattern = () => {
           }
           break;
           
-        case 'chorus': // More complex pattern (24-40s)
+        case 'chorus': // More complex pattern (16-32s)
           // Kick with some variation
           if (beat === 0 || (beat === 1 && measure % 4 === 1)) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
@@ -83,7 +83,7 @@ const generateFullSongPattern = () => {
           }
           break;
           
-        case 'outro': // Simple ending (56-60s)
+        case 'outro': // Simple ending (48-52s)
           // Just kick and hi-hat
           if (beat === 0) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
@@ -96,22 +96,22 @@ const generateFullSongPattern = () => {
     }
   };
 
-  // Build the song structure starting from 8 seconds (removed intro section)
-  createPattern(8, 24, 'verse');     // 8-24s: Verse 1 (starts right at guideline)
-  createPattern(24, 40, 'chorus');   // 24-40s: Chorus
-  createPattern(40, 56, 'verse');    // 40-56s: Verse 2
-  createPattern(56, 60, 'outro');    // 56-60s: Outro
+  // Build the song structure starting from 0 seconds
+  createPattern(0, 16, 'verse');     // 0-16s: Verse 1 (starts from beginning)
+  createPattern(16, 32, 'chorus');   // 16-32s: Chorus
+  createPattern(32, 48, 'verse');    // 32-48s: Verse 2
+  createPattern(48, 52, 'outro');    // 48-52s: Outro
 
-  // Add simple fills at section transitions (starting from 8s)
-  const fillTimes = [23.5, 39.5, 55.5]; // Removed the 7.5s fill since it's before the guideline
+  // Add simple fills at section transitions
+  const fillTimes = [15.5, 31.5, 47.5]; // Adjusted for new timeline
   fillTimes.forEach(time => {
-    if (time < 60) {
+    if (time < totalDuration) {
       // Just a single snare hit
       notes.push({ time, instrument: 'snare', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
     }
   });
 
-  console.log(`Generated ${notes.length} notes for simplified song pattern (starting from 8s)`);
+  console.log(`Generated ${notes.length} notes for song pattern (starting from 0s)`);
   return notes;
 };
 
@@ -132,7 +132,7 @@ export const DrumMachine = () => {
 
   // Generate pattern for grid display with all instruments
   const [pattern, setPattern] = useState<DrumPattern>(() => {
-    const totalSteps = Math.ceil(60 * 4); // 4 steps per second for 60 seconds
+    const totalSteps = Math.ceil(52 * 4); // Updated to 52 seconds
     const kickPattern = new Array(totalSteps).fill(false);
     const snarePattern = new Array(totalSteps).fill(false);
     const hihatPattern = new Array(totalSteps).fill(false);
@@ -269,7 +269,7 @@ export const DrumMachine = () => {
         const maxScrollPosition = Math.max(0, totalSteps - visibleSteps);
         setScrollPosition(Math.min(targetScrollPosition, maxScrollPosition));
 
-        if (timeElapsed >= 60) {
+        if (timeElapsed >= 52) { // Updated to match new duration
           setIsPlaying(false);
           if (isMicListening) {
             setShowSummary(true);
@@ -690,11 +690,11 @@ export const DrumMachine = () => {
           <p className="text-muted-foreground text-lg">
             {isMicListening 
               ? "🎵 Full drum song loaded! Play any instrument at the right time!" 
-              : "🥁 Complete 60-second drum song with all instruments - Kick, Snare, Hi-Hat & Open Hat"
+              : "🥁 Complete 52-second drum song with all instruments - Kick, Snare, Hi-Hat & Open Hat"
             }
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            Time: {currentTimeInSeconds.toFixed(1)}s / 60.0s • Notes: {scheduledNotes.length} total • Progress: {(currentStep / totalSteps * 100).toFixed(1)}%
+            Time: {currentTimeInSeconds.toFixed(1)}s / 52.0s • Notes: {scheduledNotes.length} total • Progress: {(currentStep / totalSteps * 100).toFixed(1)}%
           </p>
         </div>
 
