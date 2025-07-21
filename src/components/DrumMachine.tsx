@@ -32,17 +32,17 @@ interface PerformanceSummary {
   total: number;
 }
 
-// Generate a simpler song with notes starting from time 0
+// Generate a simpler song with notes starting from time 8
 const generateFullSongPattern = () => {
-  const totalDuration = 52; // Reduced to 52 seconds to match new structure
+  const totalDuration = 60; // 60 seconds total duration
   const notes: ScheduledNote[] = [];
   let stepIndex = 0;
 
-  // Song structure with 2 steps per second - starting from 0 seconds
+  // Song structure with 2 steps per second - starting from 8 seconds
   const beatsPerSecond = 2;
   
   // Create drum patterns for different sections with 8th note intervals (0.5s)
-  // All patterns now start from 0 seconds
+  // All patterns now start from 8 seconds
   const createPattern = (startTime: number, endTime: number, patternType: string) => {
     for (let time = startTime; time < endTime; time += 0.5) { // 8th note intervals instead of 16th
       const beat = ((time - startTime) % 2) * 2; // Beat within measure (0-2)
@@ -96,14 +96,14 @@ const generateFullSongPattern = () => {
     }
   };
 
-  // Build the song structure starting from 0 seconds
-  createPattern(0, 16, 'verse');     // 0-16s: Verse 1 (starts from beginning)
-  createPattern(16, 32, 'chorus');   // 16-32s: Chorus
-  createPattern(32, 48, 'verse');    // 32-48s: Verse 2
-  createPattern(48, 52, 'outro');    // 48-52s: Outro
+  // Build the song structure starting from 8 seconds
+  createPattern(8, 24, 'verse');     // 8-24s: Verse 1 (starts from 8s)
+  createPattern(24, 40, 'chorus');   // 24-40s: Chorus
+  createPattern(40, 56, 'verse');    // 40-56s: Verse 2
+  createPattern(56, 60, 'outro');    // 56-60s: Outro
 
   // Add simple fills at section transitions
-  const fillTimes = [15.5, 31.5, 47.5]; // Adjusted for new timeline
+  const fillTimes = [23.5, 39.5, 55.5]; // Adjusted for timeline starting at 8s
   fillTimes.forEach(time => {
     if (time < totalDuration) {
       // Just a single snare hit
@@ -132,7 +132,7 @@ export const DrumMachine = () => {
 
   // Generate pattern for grid display with all instruments
   const [pattern, setPattern] = useState<DrumPattern>(() => {
-    const totalSteps = Math.ceil(52 * 4); // Updated to 52 seconds
+    const totalSteps = Math.ceil(60 * 4); // Updated to 60 seconds
     const kickPattern = new Array(totalSteps).fill(false);
     const snarePattern = new Array(totalSteps).fill(false);
     const hihatPattern = new Array(totalSteps).fill(false);
