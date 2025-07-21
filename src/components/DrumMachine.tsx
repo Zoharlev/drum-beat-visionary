@@ -60,46 +60,14 @@ export const DrumMachine = () => {
     bestStreak: 0
   });
 
-  const [scheduledNotes] = useState<ScheduledNote[]>([{
-    time: 0.25,
-    instrument: "Hi-Hat",
-    step: 2,
-    hit: false,
-    correct: false,
-    wrongInstrument: false,
-    slightlyOff: false
-  }, {
-    time: 0.73,
-    instrument: "Hi-Hat",
-    step: 6,
-    hit: false,
-    correct: false,
-    wrongInstrument: false,
-    slightlyOff: false
-  }, {
-    time: 1.22,
-    instrument: "Hi-Hat",
-    step: 10,
-    hit: false,
-    correct: false,
-    wrongInstrument: false,
-    slightlyOff: false
-  }, {
-    time: 1.70,
-    instrument: "Hi-Hat",
-    step: 14,
-    hit: false,
-    correct: false,
-    wrongInstrument: false,
-    slightlyOff: false
-  }]);
-  const [noteResults, setNoteResults] = useState<ScheduledNote[]>(scheduledNotes);
+  const [scheduledNotes, setScheduledNotes] = useState<ScheduledNote[]>([]);
+  const [noteResults, setNoteResults] = useState<ScheduledNote[]>([]);
   const [pattern, setPattern] = useState<DrumPattern>(() => {
     const hihatPattern = new Array(16).fill(false);
-    hihatPattern[2] = true; // 0.25s
-    hihatPattern[6] = true; // 0.73s  
-    hihatPattern[10] = true; // 1.22s
-    hihatPattern[14] = true; // 1.7s
+    hihatPattern[2] = true;
+    hihatPattern[6] = true;
+    hihatPattern[10] = true;
+    hihatPattern[14] = true;
 
     return {
       kick: new Array(16).fill(false),
@@ -111,8 +79,40 @@ export const DrumMachine = () => {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const previewIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const missedBeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const { toast } = useToast();
+
+  // Generate scheduled notes from pattern
+  const generateScheduledNotes = (pattern: DrumPattern, bpm: number) => {
+    const stepDuration = 60 / bpm / 4; // Duration of each 16th note in seconds
+    const notes: ScheduledNote[] = [];
+    
+    Object.entries(pattern).forEach(([instrument, steps]) => {
+      steps.forEach((active, stepIndex) => {
+        if (active) {
+          notes.push({
+            time: stepIndex * stepDuration,
+            instrument,
+            step: stepIndex,
+            hit: false,
+            correct: false,
+            wrongInstrument: false,
+            slightlyOff: false
+          });
+        }
+      });
+    });
+    
+    return notes.sort((a, b) => a.time - b.time);
+  };
+
+  // Update scheduled notes when pattern or BPM changes
+  useEffect(() => {
+    const newScheduledNotes = generateScheduledNotes(pattern, bpm);
+    setScheduledNotes(newScheduledNotes);
+    setNoteResults(newScheduledNotes.map(note => ({ ...note })));
+  }, [pattern, bpm]);
 
   const updateTimingStats = (accuracy: 'perfect' | 'good' | 'slightly-off' | 'miss') => {
     setTimingStats(prev => {
@@ -173,19 +173,38 @@ export const DrumMachine = () => {
     oscillator.stop(context.currentTime + 0.3);
   };
 
+  const detectInstrumentFromHit = (hit: DetectedHit): string => {
+    const { frequency, amplitude, isHiHat } = hit;
+    
+    // Enhanced instrument detection logic
+    if (isHiHat) {
+      return frequency > 8000 ? 'openhat' : 'hihat';
+    } else if (frequency < 100 && amplitude > 0.5) {
+      return 'kick';
+    } else if (frequency > 100 && frequency < 1000) {
+      return 'snare';
+    }
+    
+    return 'unknown';
+  };
+
   const onHitDetected = (hit: DetectedHit) => {
-    if (!isPlaying || !isMicListening) {
-      console.log('Hit detected but not in listening mode');
+    // Remove mode restrictions - work during both recording and playback
+    if (!isPlaying) {
+      console.log('Hit detected but not playing');
       return;
     }
+
     const currentTime = (Date.now() - startTime) / 1000;
     setCurrentTimeInSeconds(currentTime);
+    
     const perfectWindow = 0.025; // ±25ms for perfect timing
     const goodWindow = 0.05; // ±50ms for good timing
     const acceptableWindow = 0.1; // ±100ms for acceptable timing
 
     console.log(`Hit at ${currentTime.toFixed(2)}s, looking for matches...`);
 
+    const detectedInstrument = detectInstrumentFromHit(hit);
     let matchingNote = null;
     let closestTimeDiff = Infinity;
 
@@ -198,7 +217,7 @@ export const DrumMachine = () => {
     }
 
     if (matchingNote) {
-      const actualTimeDiff = currentTime - matchingNote.time; // Negative = early, positive = late
+      const actualTimeDiff = currentTime - matchingNote.time;
       setLastHitTiming(actualTimeDiff);
       
       console.log(`Match found for note at ${matchingNote.time}s (diff: ${closestTimeDiff.toFixed(3)}s)`);
@@ -208,7 +227,9 @@ export const DrumMachine = () => {
           const updatedNote = { ...note };
           updatedNote.hit = true;
           
-          if (hit.isHiHat) {
+          const isCorrectInstrument = detectedInstrument === matchingNote.instrument;
+          
+          if (isCorrectInstrument) {
             if (closestTimeDiff <= perfectWindow) {
               updatedNote.correct = true;
               updatedNote.wrongInstrument = false;
@@ -216,10 +237,10 @@ export const DrumMachine = () => {
               setLastHitAccuracy('perfect');
               updateTimingStats('perfect');
               playFeedbackSound('perfect');
-              playDrumSound('hihat');
+              playDrumSound(matchingNote.instrument);
               toast({
                 title: "Perfect hit! 🟢",
-                description: `Excellent timing (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
+                description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else if (closestTimeDiff <= goodWindow) {
               updatedNote.correct = false;
@@ -228,10 +249,10 @@ export const DrumMachine = () => {
               setLastHitAccuracy('good');
               updateTimingStats('good');
               playFeedbackSound('good');
-              playDrumSound('hihat');
+              playDrumSound(matchingNote.instrument);
               toast({
                 title: "Good hit! 🟡",
-                description: `Good timing (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
+                description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else {
               updatedNote.correct = false;
@@ -240,10 +261,10 @@ export const DrumMachine = () => {
               setLastHitAccuracy('slightly-off');
               updateTimingStats('slightly-off');
               playFeedbackSound('slightly-off');
-              playDrumSound('hihat');
+              playDrumSound(matchingNote.instrument);
               toast({
                 title: "Close! 🟠",
-                description: `Slightly off timing (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
+                description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             }
           } else {
@@ -255,7 +276,7 @@ export const DrumMachine = () => {
             playFeedbackSound('miss');
             toast({
               title: "Wrong instrument 🔴",
-              description: "Try hitting the Hi-Hat - good timing though!",
+              description: `Hit ${detectedInstrument} but expected ${matchingNote.instrument}`,
               variant: "destructive"
             });
           }
@@ -270,19 +291,63 @@ export const DrumMachine = () => {
       updateTimingStats('miss');
       playFeedbackSound('miss');
       
-      if (hit.isHiHat) {
-        toast({
-          title: "Hi-Hat detected",
-          description: "Try to hit exactly on the highlighted beats"
-        });
-      } else {
-        toast({
-          title: "Hit detected",
-          description: "Focus on the Hi-Hat at the right timing"
-        });
-      }
+      toast({
+        title: "Timing off",
+        description: "No matching beat found - focus on the highlighted beats"
+      });
     }
   };
+
+  // Monitor for missed beats
+  useEffect(() => {
+    if (isPlaying) {
+      missedBeatIntervalRef.current = setInterval(() => {
+        const currentTime = (Date.now() - startTime) / 1000;
+        
+        // Check for missed beats
+        const missedNotes = noteResults.filter(note => 
+          !note.hit && 
+          currentTime > note.time + 0.1 && // 100ms grace period
+          currentTime < note.time + 0.5 // Don't mark very old notes as missed
+        );
+        
+        if (missedNotes.length > 0) {
+          const updatedResults = noteResults.map(note => {
+            if (missedNotes.includes(note)) {
+              const updatedNote = { ...note };
+              updatedNote.hit = true; // Mark as processed
+              updatedNote.correct = false;
+              updatedNote.wrongInstrument = false;
+              updatedNote.slightlyOff = false;
+              return updatedNote;
+            }
+            return note;
+          });
+          
+          setNoteResults(updatedResults);
+          
+          // Update stats for missed beats
+          missedNotes.forEach(() => {
+            updateTimingStats('miss');
+          });
+          
+          setLastHitAccuracy('miss');
+          playFeedbackSound('miss');
+        }
+      }, 50); // Check every 50ms
+    } else {
+      if (missedBeatIntervalRef.current) {
+        clearInterval(missedBeatIntervalRef.current);
+        missedBeatIntervalRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (missedBeatIntervalRef.current) {
+        clearInterval(missedBeatIntervalRef.current);
+      }
+    };
+  }, [isPlaying, noteResults, startTime]);
 
   const {
     hasPermission,
@@ -325,7 +390,6 @@ export const DrumMachine = () => {
       intervalRef.current = setInterval(() => {
         setCurrentStep(prev => {
           const nextStep = (prev + 1) % 16;
-          // Update current time in seconds for timeline tracking
           const timeElapsed = (Date.now() - startTime) / 1000;
           setCurrentTimeInSeconds(timeElapsed);
           return nextStep;
@@ -391,46 +455,41 @@ export const DrumMachine = () => {
   const playDrumSound = (drum: string) => {
     if (!audioContextRef.current) return;
     const context = audioContextRef.current;
+    
     if (drum === 'hihat' || drum === 'openhat') {
-      // Create white noise for hi-hat sounds
-      const bufferSize = context.sampleRate * 0.1; // 100ms of noise
+      const bufferSize = context.sampleRate * 0.1;
       const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
       const data = buffer.getChannelData(0);
 
-      // Generate white noise
       for (let i = 0; i < bufferSize; i++) {
         data[i] = Math.random() * 2 - 1;
       }
       const noise = context.createBufferSource();
       noise.buffer = buffer;
+      
       if (drum === 'openhat') {
-        // Open hat: Lower frequency, more resonant, longer decay
         const highpassFilter = context.createBiquadFilter();
         highpassFilter.type = 'highpass';
         highpassFilter.frequency.setValueAtTime(6000, context.currentTime);
         highpassFilter.Q.setValueAtTime(0.5, context.currentTime);
 
-        // Resonant bandpass for more metallic ring
         const resonantFilter = context.createBiquadFilter();
         resonantFilter.type = 'bandpass';
         resonantFilter.frequency.setValueAtTime(9000, context.currentTime);
         resonantFilter.Q.setValueAtTime(4, context.currentTime);
 
-        // Additional high shelf for brightness
         const shelfFilter = context.createBiquadFilter();
         shelfFilter.type = 'highshelf';
         shelfFilter.frequency.setValueAtTime(10000, context.currentTime);
         shelfFilter.gain.setValueAtTime(6, context.currentTime);
         const gainNode = context.createGain();
 
-        // Connect the chain for open hat
         noise.connect(highpassFilter);
         highpassFilter.connect(resonantFilter);
         resonantFilter.connect(shelfFilter);
         shelfFilter.connect(gainNode);
         gainNode.connect(context.destination);
 
-        // Open hat envelope: quick attack, slower decay with sustain
         const duration = 0.4;
         gainNode.gain.setValueAtTime(0, context.currentTime);
         gainNode.gain.linearRampToValueAtTime(0.35, context.currentTime + 0.002);
@@ -439,7 +498,6 @@ export const DrumMachine = () => {
         noise.start(context.currentTime);
         noise.stop(context.currentTime + duration);
       } else {
-        // Closed hi-hat: Original tighter sound
         const highpassFilter = context.createBiquadFilter();
         highpassFilter.type = 'highpass';
         highpassFilter.frequency.setValueAtTime(8000, context.currentTime);
@@ -450,13 +508,11 @@ export const DrumMachine = () => {
         bandpassFilter.Q.setValueAtTime(2, context.currentTime);
         const gainNode = context.createGain();
 
-        // Connect the chain for closed hi-hat
         noise.connect(highpassFilter);
         highpassFilter.connect(bandpassFilter);
         bandpassFilter.connect(gainNode);
         gainNode.connect(context.destination);
 
-        // Closed hi-hat envelope: tight and short
         const duration = 0.08;
         gainNode.gain.setValueAtTime(0, context.currentTime);
         gainNode.gain.linearRampToValueAtTime(0.3, context.currentTime + 0.001);
@@ -465,9 +521,6 @@ export const DrumMachine = () => {
         noise.stop(context.currentTime + duration);
       }
     } else if (drum === 'snare') {
-      // Complex snare sound with tonal and noise components
-
-      // Tonal component (drum body)
       const oscillator1 = context.createOscillator();
       const oscillator2 = context.createOscillator();
       const toneGain = context.createGain();
@@ -476,13 +529,11 @@ export const DrumMachine = () => {
       oscillator1.type = 'triangle';
       oscillator2.type = 'sine';
 
-      // Pitch envelope for snare crack
       oscillator1.frequency.exponentialRampToValueAtTime(80, context.currentTime + 0.02);
       oscillator2.frequency.exponentialRampToValueAtTime(60, context.currentTime + 0.02);
       oscillator1.connect(toneGain);
       oscillator2.connect(toneGain);
 
-      // Noise component (snares)
       const noiseBufferSize = context.sampleRate * 0.1;
       const noiseBuffer = context.createBuffer(1, noiseBufferSize, context.sampleRate);
       const noiseData = noiseBuffer.getChannelData(0);
@@ -492,7 +543,6 @@ export const DrumMachine = () => {
       const noise = context.createBufferSource();
       noise.buffer = noiseBuffer;
 
-      // Shape the noise for snare character
       const noiseFilter = context.createBiquadFilter();
       noiseFilter.type = 'bandpass';
       noiseFilter.frequency.setValueAtTime(3000, context.currentTime);
@@ -501,23 +551,21 @@ export const DrumMachine = () => {
       noise.connect(noiseFilter);
       noiseFilter.connect(noiseGain);
 
-      // Mix tonal and noise components
       const mixGain = context.createGain();
       toneGain.connect(mixGain);
       noiseGain.connect(mixGain);
       mixGain.connect(context.destination);
 
-      // Envelope for overall snare
       const duration = 0.15;
       mixGain.gain.setValueAtTime(0, context.currentTime);
       mixGain.gain.linearRampToValueAtTime(0.4, context.currentTime + 0.002);
       mixGain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + duration);
 
-      // Individual component envelopes
       toneGain.gain.setValueAtTime(0.7, context.currentTime);
       toneGain.gain.exponentialRampToValueAtTime(0.1, context.currentTime + 0.03);
       noiseGain.gain.setValueAtTime(0.4, context.currentTime);
       noiseGain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + duration);
+      
       oscillator1.start(context.currentTime);
       oscillator1.stop(context.currentTime + 0.03);
       oscillator2.start(context.currentTime);
@@ -525,36 +573,29 @@ export const DrumMachine = () => {
       noise.start(context.currentTime);
       noise.stop(context.currentTime + duration);
     } else {
-      // Improved kick drum with sub-bass and attack click
-
-      // Main kick oscillator (fundamental)
       const kickOsc = context.createOscillator();
       const kickGain = context.createGain();
       kickOsc.frequency.setValueAtTime(60, context.currentTime);
       kickOsc.frequency.exponentialRampToValueAtTime(35, context.currentTime + 0.05);
       kickOsc.type = 'sine';
 
-      // Sub-bass oscillator for weight
       const subOsc = context.createOscillator();
       const subGain = context.createGain();
       subOsc.frequency.setValueAtTime(30, context.currentTime);
       subOsc.frequency.exponentialRampToValueAtTime(20, context.currentTime + 0.08);
       subOsc.type = 'sine';
 
-      // Attack click for punch
       const clickOsc = context.createOscillator();
       const clickGain = context.createGain();
       clickOsc.frequency.setValueAtTime(1000, context.currentTime);
       clickOsc.frequency.exponentialRampToValueAtTime(100, context.currentTime + 0.005);
       clickOsc.type = 'square';
 
-      // Low-pass filter for warmth
       const lowPassFilter = context.createBiquadFilter();
       lowPassFilter.type = 'lowpass';
       lowPassFilter.frequency.setValueAtTime(120, context.currentTime);
       lowPassFilter.Q.setValueAtTime(1, context.currentTime);
 
-      // Mix all components
       const mixGain = context.createGain();
       kickOsc.connect(kickGain);
       subOsc.connect(subGain);
@@ -565,22 +606,19 @@ export const DrumMachine = () => {
       lowPassFilter.connect(mixGain);
       mixGain.connect(context.destination);
 
-      // Envelope for main kick
       const duration = 0.3;
       kickGain.gain.setValueAtTime(0.6, context.currentTime);
       kickGain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + duration);
 
-      // Sub-bass envelope
       subGain.gain.setValueAtTime(0.4, context.currentTime);
       subGain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + duration * 0.8);
 
-      // Click envelope (very short)
       clickGain.gain.setValueAtTime(0.3, context.currentTime);
       clickGain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.01);
 
-      // Overall mix envelope
       mixGain.gain.setValueAtTime(0.5, context.currentTime);
       mixGain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + duration);
+      
       kickOsc.start(context.currentTime);
       kickOsc.stop(context.currentTime + duration);
       subOsc.start(context.currentTime);
@@ -621,24 +659,18 @@ export const DrumMachine = () => {
 
   const togglePlay = () => {
     if (!isPlaying) {
-      // Stop preview if it's running
       if (isPreviewPlaying) {
         setIsPreviewPlaying(false);
         setPreviewStep(0);
       }
-      // Reset results when starting
-      const resetNotes = scheduledNotes.map(note => ({
-        ...note,
-        hit: false,
-        correct: false,
-        wrongInstrument: false,
-        slightlyOff: false
-      }));
+      
+      // Reset timing feedback and results
+      const resetNotes = generateScheduledNotes(pattern, bpm);
       setNoteResults(resetNotes);
+      setScheduledNotes(resetNotes);
       setStartTime(Date.now());
       setCurrentStep(0);
       setCurrentTimeInSeconds(0);
-      // Reset timing feedback
       setLastHitTiming(null);
       setLastHitAccuracy(null);
       setTimingStats({
@@ -652,10 +684,11 @@ export const DrumMachine = () => {
       console.log('Practice started, timer reset');
     }
     setIsPlaying(!isPlaying);
+    
     if (!isPlaying) {
       toast({
         title: "Practice started",
-        description: isMicListening ? "Hit the Hi-Hat at the right time!" : "Enable microphone to practice"
+        description: "Timing feedback active - hit the beats!"
       });
     }
   };
@@ -685,7 +718,7 @@ export const DrumMachine = () => {
         startRecording();
         toast({
           title: "Recording started",
-          description: "Capturing audio from microphone"
+          description: "Capturing audio with timing feedback"
         });
       } else {
         toast({
@@ -702,14 +735,11 @@ export const DrumMachine = () => {
     setIsPreviewPlaying(false);
     setCurrentStep(0);
     setPreviewStep(0);
-    setNoteResults(scheduledNotes.map(note => ({
-      ...note,
-      hit: false,
-      correct: false,
-      wrongInstrument: false,
-      slightlyOff: false
-    })));
-    // Reset timing feedback
+    
+    // Reset all timing data
+    const resetNotes = generateScheduledNotes(pattern, bpm);
+    setNoteResults(resetNotes);
+    setScheduledNotes(resetNotes);
     setLastHitTiming(null);
     setLastHitAccuracy(null);
     setTimingStats({
@@ -720,9 +750,10 @@ export const DrumMachine = () => {
       currentStreak: 0,
       bestStreak: 0
     });
+    
     toast({
       title: "Reset",
-      description: "Pattern reset to beginning"
+      description: "Pattern and timing feedback reset"
     });
   };
 
@@ -731,7 +762,6 @@ export const DrumMachine = () => {
   };
 
   const toggleStep = (drum: string, step: number) => {
-    // Only allow toggling if microphone is not listening (fallback click mode)
     if (!isMicListening) {
       setPattern(prev => ({
         ...prev,
@@ -747,13 +777,19 @@ export const DrumMachine = () => {
       hihat: new Array(16).fill(false),
       openhat: new Array(16).fill(false)
     });
-    setNoteResults(scheduledNotes.map(note => ({
-      ...note,
-      hit: false,
-      correct: false,
-      wrongInstrument: false,
-      slightlyOff: false
-    })));
+    
+    // Reset timing feedback
+    setLastHitTiming(null);
+    setLastHitAccuracy(null);
+    setTimingStats({
+      perfectHits: 0,
+      goodHits: 0,
+      missedHits: 0,
+      totalHits: 0,
+      currentStreak: 0,
+      bestStreak: 0
+    });
+    
     toast({
       title: "Cleared",
       description: "All patterns cleared"
@@ -764,11 +800,17 @@ export const DrumMachine = () => {
   const getNextBeatTime = () => {
     if (!isPlaying) return null;
     
-    const nextNote = scheduledNotes.find(note => 
+    const nextNote = noteResults.find(note => 
       note.time > currentTimeInSeconds && !note.hit
     );
     
     return nextNote ? nextNote.time : null;
+  };
+
+  // Calculate accuracy percentage for recording status
+  const getAccuracyPercentage = () => {
+    if (timingStats.totalHits === 0) return 100;
+    return Math.round(((timingStats.perfectHits + timingStats.goodHits) / timingStats.totalHits) * 100);
   };
 
   return (
@@ -842,7 +884,7 @@ export const DrumMachine = () => {
           </Button>
         </div>
 
-        {/* Recording Status */}
+        {/* Recording Status with Timing Info */}
         {isRecording && (
           <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
             <div className="flex items-center gap-3">
@@ -851,6 +893,11 @@ export const DrumMachine = () => {
               <span className="text-muted-foreground">
                 {formatDuration(recordingDuration)} • {getEstimatedSize(recordingDuration)}
               </span>
+              {isPlaying && (
+                <span className="text-muted-foreground">
+                  • Accuracy: {getAccuracyPercentage()}%
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -898,7 +945,7 @@ export const DrumMachine = () => {
             lastHitTiming={lastHitTiming}
             lastHitAccuracy={lastHitAccuracy}
             stats={timingStats}
-            isListening={isMicListening}
+            isListening={isPlaying} // Show feedback when playing (not just mic listening)
             nextBeatTime={getNextBeatTime()}
             currentTime={currentTimeInSeconds}
           />
@@ -908,12 +955,12 @@ export const DrumMachine = () => {
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isPreviewPlaying ? "Preview playing - listen to the rhythm" : 
-             isMicListening ? "Hit the Hi-Hat at the highlighted times" : 
+             isPlaying ? "Hit the drums at the highlighted times - timing feedback active!" : 
              "Click on the grid to add or remove notes"}
           </p>
-          {isMicListening && (
+          {isPlaying && (
             <p className="text-sm text-muted-foreground mt-2">
-              {canRecord ? "Recording available" : "Enable microphone to record"}
+              {isRecording ? "Recording with live timing feedback" : "Practice mode - perfect your timing"}
             </p>
           )}
         </div>

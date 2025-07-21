@@ -1,5 +1,5 @@
 
-import { Check, X, AlertTriangle, Target, TrendingUp } from "lucide-react";
+import { Check, X, AlertTriangle, Target, TrendingUp, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TimingStats {
@@ -30,11 +30,11 @@ export const TimingFeedback = ({
 }: TimingFeedbackProps) => {
   const getAccuracyColor = (accuracy: string | null) => {
     switch (accuracy) {
-      case 'perfect': return 'text-green-500 bg-green-500/10';
-      case 'good': return 'text-yellow-500 bg-yellow-500/10';
-      case 'slightly-off': return 'text-orange-500 bg-orange-500/10';
-      case 'miss': return 'text-red-500 bg-red-500/10';
-      default: return 'text-muted-foreground bg-muted/10';
+      case 'perfect': return 'text-green-500 bg-green-500/10 border-green-500/20';
+      case 'good': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
+      case 'slightly-off': return 'text-orange-500 bg-orange-500/10 border-orange-500/20';
+      case 'miss': return 'text-red-500 bg-red-500/10 border-red-500/20';
+      default: return 'text-muted-foreground bg-muted/10 border-muted/20';
     }
   };
 
@@ -44,12 +44,14 @@ export const TimingFeedback = ({
       case 'good': return <Target className="h-5 w-5" />;
       case 'slightly-off': return <AlertTriangle className="h-5 w-5" />;
       case 'miss': return <X className="h-5 w-5" />;
-      default: return null;
+      default: return <Clock className="h-5 w-5" />;
     }
   };
 
   const getAccuracyMessage = (accuracy: string | null, timing: number | null) => {
-    if (!accuracy || timing === null) return 'Ready to practice';
+    if (!accuracy || timing === null) {
+      return isListening ? 'Ready to play - hit the beats!' : 'Start playing to see timing feedback';
+    }
     
     const timingMs = Math.round(timing * 1000);
     const early = timing < 0;
@@ -59,8 +61,8 @@ export const TimingFeedback = ({
       case 'perfect': return timingMs === 0 ? 'Perfect timing!' : `Perfect! (${timingText})`;
       case 'good': return `Good timing! (${timingText})`;
       case 'slightly-off': return `Close! (${timingText})`;
-      case 'miss': return 'Try again - focus on timing';
-      default: return 'Ready to practice';
+      case 'miss': return 'Missed beat - keep trying!';
+      default: return isListening ? 'Ready to play' : 'Start playing';
     }
   };
 
@@ -84,7 +86,7 @@ export const TimingFeedback = ({
             <div className="text-lg font-semibold">
               {getAccuracyMessage(lastHitAccuracy, lastHitTiming)}
             </div>
-            {nextBeatIn !== null && nextBeatIn < 0.2 && (
+            {nextBeatIn !== null && nextBeatIn < 0.5 && isListening && (
               <div className="text-sm text-muted-foreground animate-pulse">
                 Next beat in {Math.round(nextBeatIn * 1000)}ms
               </div>
@@ -93,8 +95,8 @@ export const TimingFeedback = ({
         </div>
       </div>
 
-      {/* Statistics Display */}
-      {isListening && stats.totalHits > 0 && (
+      {/* Live Statistics Display - Show during active playing */}
+      {isListening && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center p-3 bg-secondary rounded-lg">
             <div className="text-2xl font-bold text-green-500">{stats.perfectHits}</div>
@@ -109,7 +111,14 @@ export const TimingFeedback = ({
             <div className="text-sm text-muted-foreground">Missed</div>
           </div>
           <div className="text-center p-3 bg-secondary rounded-lg">
-            <div className="text-2xl font-bold text-primary">{accuracyPercentage}%</div>
+            <div className={cn(
+              "text-2xl font-bold",
+              accuracyPercentage >= 90 ? "text-green-500" :
+              accuracyPercentage >= 70 ? "text-yellow-500" :
+              "text-red-500"
+            )}>
+              {accuracyPercentage}%
+            </div>
             <div className="text-sm text-muted-foreground">Accuracy</div>
           </div>
         </div>
@@ -127,6 +136,22 @@ export const TimingFeedback = ({
               (Best: {stats.bestStreak})
             </span>
           )}
+        </div>
+      )}
+
+      {/* Beat Anticipation Indicator */}
+      {nextBeatIn !== null && nextBeatIn < 1 && isListening && (
+        <div className="flex items-center justify-center gap-2 p-2 bg-blue-500/10 rounded-lg">
+          <Clock className="h-4 w-4 text-blue-500" />
+          <div className="text-sm text-blue-500">
+            Next beat: {Math.round(nextBeatIn * 1000)}ms
+          </div>
+          <div className="w-16 h-2 bg-blue-500/20 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-blue-500 rounded-full transition-all duration-100"
+              style={{ width: `${Math.max(0, 100 - (nextBeatIn * 100))}%` }}
+            />
+          </div>
         </div>
       )}
     </div>
