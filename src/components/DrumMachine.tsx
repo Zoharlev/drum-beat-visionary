@@ -194,7 +194,7 @@ export const DrumMachine = () => {
         setCurrentStep(newStep);
         
         // Timeline-style scrolling: scroll to keep playhead in center-right of viewport
-        const centerOffset = visibleSteps * 0.75; // Keep playhead at 75% of visible area
+        const centerOffset = visibleSteps * 0.9; // Keep playhead at 90% of visible area (right side)
         const targetScrollPosition = Math.max(0, newStep - centerOffset);
         const maxScrollPosition = Math.max(0, totalSteps - visibleSteps);
         setScrollPosition(Math.min(targetScrollPosition, maxScrollPosition));
