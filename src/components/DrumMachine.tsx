@@ -44,10 +44,11 @@ export const DrumMachine = () => {
   const [isMicListening, setIsMicListening] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [previewStep, setPreviewStep] = useState(0);
-  const [bpm, setBpm] = useState(120);
+  const [bpm, setBpm] = useState(80);
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
+  const [completedNotesCount, setCompletedNotesCount] = useState(0);
 
   // Timing feedback states
   const [lastHitTiming, setLastHitTiming] = useState<number | null>(null);
@@ -120,6 +121,27 @@ export const DrumMachine = () => {
     setNoteResults(newScheduledNotes.map(note => ({ ...note })));
   }, [pattern, bpm]);
 
+  // Auto-stop after 4 notes
+  const checkAutoStop = () => {
+    if (completedNotesCount >= 4) {
+      setIsPlaying(false);
+      
+      if (isRecording) {
+        stopRecording();
+      }
+      
+      // Calculate session duration and show summary
+      const duration = (Date.now() - sessionStartTime) / 1000;
+      setSessionDuration(duration);
+      setShowSessionSummary(true);
+      
+      toast({
+        title: "Session Complete! 🎉",
+        description: "Completed 4 notes - check your results!"
+      });
+    }
+  };
+
   const updateTimingStats = (accuracy: 'perfect' | 'good' | 'slightly-off' | 'miss') => {
     setTimingStats(prev => {
       const newStats = { ...prev };
@@ -139,6 +161,14 @@ export const DrumMachine = () => {
       }
       
       return newStats;
+    });
+    
+    // Increment completed notes and check for auto-stop
+    setCompletedNotesCount(prev => {
+      const newCount = prev + 1;
+      // Use setTimeout to ensure state updates are processed
+      setTimeout(() => checkAutoStop(), 0);
+      return newCount;
     });
   };
 
@@ -245,7 +275,7 @@ export const DrumMachine = () => {
               playFeedbackSound('perfect');
               playDrumSound(matchingNote.instrument);
               toast({
-                title: "Perfect hit! 🟢",
+                title: `Perfect hit! 🟢 (${completedNotesCount + 1}/4)`,
                 description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else if (closestTimeDiff <= goodWindow) {
@@ -257,7 +287,7 @@ export const DrumMachine = () => {
               playFeedbackSound('good');
               playDrumSound(matchingNote.instrument);
               toast({
-                title: "Good hit! 🟡",
+                title: `Good hit! 🟡 (${completedNotesCount + 1}/4)`,
                 description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else {
@@ -269,7 +299,7 @@ export const DrumMachine = () => {
               playFeedbackSound('slightly-off');
               playDrumSound(matchingNote.instrument);
               toast({
-                title: "Close! 🟠",
+                title: `Close! 🟠 (${completedNotesCount + 1}/4)`,
                 description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             }
@@ -281,7 +311,7 @@ export const DrumMachine = () => {
             updateTimingStats('miss');
             playFeedbackSound('miss');
             toast({
-              title: "Wrong instrument 🔴",
+              title: `Wrong instrument 🔴 (${completedNotesCount + 1}/4)`,
               description: `Hit ${detectedInstrument} but expected ${matchingNote.instrument}`,
               variant: "destructive"
             });
@@ -353,7 +383,7 @@ export const DrumMachine = () => {
         clearInterval(missedBeatIntervalRef.current);
       }
     };
-  }, [isPlaying, noteResults, startTime]);
+  }, [isPlaying, noteResults, startTime, completedNotesCount]);
 
   const {
     hasPermission,
@@ -681,6 +711,7 @@ export const DrumMachine = () => {
       setCurrentTimeInSeconds(0);
       setLastHitTiming(null);
       setLastHitAccuracy(null);
+      setCompletedNotesCount(0);
       setTimingStats({
         perfectHits: 0,
         goodHits: 0,
@@ -705,7 +736,7 @@ export const DrumMachine = () => {
     if (!isPlaying) {
       toast({
         title: "Practice started",
-        description: "Timing feedback active - hit the beats!"
+        description: "Hit 4 notes to complete the session!"
       });
     }
   };
@@ -754,6 +785,7 @@ export const DrumMachine = () => {
           setCurrentTimeInSeconds(0);
           setLastHitTiming(null);
           setLastHitAccuracy(null);
+          setCompletedNotesCount(0);
           setTimingStats({
             perfectHits: 0,
             goodHits: 0,
@@ -768,7 +800,7 @@ export const DrumMachine = () => {
         startRecording();
         toast({
           title: "Recording started",
-          description: "Auto-started playback with timing feedback"
+          description: "Auto-started playback - hit 4 notes to complete!"
         });
       } else {
         toast({
@@ -804,6 +836,7 @@ export const DrumMachine = () => {
     setScheduledNotes(resetNotes);
     setLastHitTiming(null);
     setLastHitAccuracy(null);
+    setCompletedNotesCount(0);
     setTimingStats({
       perfectHits: 0,
       goodHits: 0,
@@ -821,7 +854,7 @@ export const DrumMachine = () => {
   };
 
   const changeBpm = (delta: number) => {
-    setBpm(prev => Math.max(60, Math.min(200, prev + delta)));
+    setBpm(prev => Math.max(40, Math.min(120, prev + delta)));
   };
 
   const toggleStep = (drum: string, step: number) => {
@@ -844,6 +877,7 @@ export const DrumMachine = () => {
     // Reset timing feedback
     setLastHitTiming(null);
     setLastHitAccuracy(null);
+    setCompletedNotesCount(0);
     setTimingStats({
       perfectHits: 0,
       goodHits: 0,
@@ -868,6 +902,7 @@ export const DrumMachine = () => {
     setScheduledNotes(resetNotes);
     setLastHitTiming(null);
     setLastHitAccuracy(null);
+    setCompletedNotesCount(0);
     setTimingStats({
       perfectHits: 0,
       goodHits: 0,
@@ -941,7 +976,7 @@ export const DrumMachine = () => {
             
             {/* Tempo Controls */}
             <div className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg">
-              <Button variant="ghost" size="icon" onClick={() => changeBpm(-5)} className="h-8 w-8">
+              <Button variant="ghost" size="icon" onClick={() => changeBpm(-2)} className="h-8 w-8">
                 <Minus className="h-4 w-4" />
               </Button>
               
@@ -953,7 +988,7 @@ export const DrumMachine = () => {
                 </span>
               </div>
               
-              <Button variant="ghost" size="icon" onClick={() => changeBpm(5)} className="h-8 w-8">
+              <Button variant="ghost" size="icon" onClick={() => changeBpm(2)} className="h-8 w-8">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -983,6 +1018,24 @@ export const DrumMachine = () => {
             <Settings className="h-5 w-5" />
           </Button>
         </div>
+
+        {/* Progress Display */}
+        {isPlaying && (
+          <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-primary rounded-full animate-pulse"></div>
+                <span className="text-primary font-medium">Session Progress</span>
+                <span className="text-muted-foreground">
+                  {completedNotesCount}/4 notes completed
+                </span>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {4 - completedNotesCount} notes remaining
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Recording Status with Timing Info */}
         {isRecording && (
@@ -1055,7 +1108,7 @@ export const DrumMachine = () => {
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isPreviewPlaying ? "Preview playing - listen to the rhythm" : 
-             isPlaying ? "Hit the drums at the highlighted times - timing feedback active!" : 
+             isPlaying ? "Hit the drums at the highlighted times - complete 4 notes!" : 
              "Click on the grid to add or remove notes"}
           </p>
           {isPlaying && (
