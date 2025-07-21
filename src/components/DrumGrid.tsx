@@ -115,10 +115,7 @@ export const DrumGrid = ({
       {/* Grid Container */}
       <div className="relative bg-card rounded-lg p-6 shadow-elevated">
         {/* Playhead */}
-        <div className="absolute top-0 bottom-0 w-1 bg-playhead transition-all duration-75 z-10" style={{
-        left: `${88 + currentStep * (100 - 88 / 16) / 16}%`,
-        boxShadow: "0 0 20px hsl(var(--playhead) / 0.6)"
-      }} />
+        
 
         {/* Beat Numbers */}
         <div className="flex mb-4">
