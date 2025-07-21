@@ -3,11 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, RefreshCw } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
-
 interface DrumPattern {
   [key: string]: boolean[];
 }
-
 interface ScheduledNote {
   time: number;
   instrument: string;
@@ -17,14 +15,12 @@ interface ScheduledNote {
   wrongInstrument: boolean;
   slightlyOff: boolean;
 }
-
 interface DetectedHit {
   time: number;
   frequency: number;
   amplitude: number;
   isHiHat: boolean;
 }
-
 interface PerformanceSummary {
   hits: number;
   misses: number;
@@ -37,9 +33,7 @@ const generateExtendedPattern = () => {
   const totalDuration = 60; // 60 seconds
   const noteInterval = 5; // 5 seconds between notes
   const notes: ScheduledNote[] = [];
-  
   let stepIndex = 0;
-  
   for (let time = 0; time < totalDuration; time += noteInterval) {
     notes.push({
       time: time,
@@ -52,10 +46,8 @@ const generateExtendedPattern = () => {
     });
     stepIndex++;
   }
-  
   return notes;
 };
-
 export const DrumMachine = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMicListening, setIsMicListening] = useState(false);
@@ -70,18 +62,17 @@ export const DrumMachine = () => {
   // Extended pattern for 60 seconds
   const [scheduledNotes] = useState<ScheduledNote[]>(generateExtendedPattern());
   const [noteResults, setNoteResults] = useState<ScheduledNote[]>(scheduledNotes);
-  
+
   // Generate pattern for grid display (show notes every 20 steps = 5 seconds)
   const [pattern, setPattern] = useState<DrumPattern>(() => {
     const hihatPattern = new Array(Math.ceil(60 * 4)).fill(false); // 4 steps per second for 60 seconds
-    
+
     scheduledNotes.forEach(note => {
       const gridStep = Math.floor(note.time * 4); // Convert time to grid step (every 20 steps)
       if (gridStep < hihatPattern.length) {
         hihatPattern[gridStep] = true;
       }
     });
-
     return {
       kick: new Array(hihatPattern.length).fill(false),
       snare: new Array(hihatPattern.length).fill(false),
@@ -89,28 +80,27 @@ export const DrumMachine = () => {
       openhat: new Array(hihatPattern.length).fill(false)
     };
   });
-
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-
   const calculatePerformance = (): PerformanceSummary => {
     const hits = noteResults.filter(note => note.correct).length;
     const mistakes = noteResults.filter(note => note.hit && (note.wrongInstrument || note.slightlyOff)).length;
     const misses = noteResults.filter(note => !note.hit).length;
     const total = noteResults.length;
-
-    return { hits, misses, mistakes, total };
+    return {
+      hits,
+      misses,
+      mistakes,
+      total
+    };
   };
-
   const onHitDetected = (hit: DetectedHit) => {
     if (!isPlaying || !isMicListening) {
       console.log('Hit detected but not in listening mode');
       return;
     }
-
     const currentTime = (Date.now() - startTime) / 1000;
     setCurrentTimeInSeconds(currentTime);
-    
     const perfectWindow = 0.05; // ±0.05 seconds for perfect timing
     const goodWindow = 0.1; // ±0.1 seconds for acceptable timing
 
@@ -119,7 +109,6 @@ export const DrumMachine = () => {
     // Find the closest scheduled note within timing window
     let matchingNote = null;
     let closestTimeDiff = Infinity;
-
     for (const note of noteResults) {
       const timeDiff = Math.abs(currentTime - note.time);
       if (timeDiff <= goodWindow && !note.hit && timeDiff < closestTimeDiff) {
@@ -127,15 +116,15 @@ export const DrumMachine = () => {
         closestTimeDiff = timeDiff;
       }
     }
-
     if (matchingNote) {
       console.log(`Match found for note at ${matchingNote.time}s (diff: ${closestTimeDiff.toFixed(3)}s)`);
-
       const updatedResults = noteResults.map(note => {
         if (note === matchingNote) {
-          const updatedNote = { ...note };
+          const updatedNote = {
+            ...note
+          };
           updatedNote.hit = true;
-          
+
           // Base feedback purely on timing accuracy, not sound type
           if (closestTimeDiff <= perfectWindow) {
             updatedNote.correct = true;
@@ -152,15 +141,17 @@ export const DrumMachine = () => {
         }
         return note;
       });
-      
       setNoteResults(updatedResults);
     } else {
       // Hit detected but no matching note - no notification needed
       console.log('Hit detected but no matching scheduled note');
     }
   };
-
-  const { hasPermission, error, initializeMicrophone } = useMicrophoneDetection({
+  const {
+    hasPermission,
+    error,
+    initializeMicrophone
+  } = useMicrophoneDetection({
     isListening: isMicListening,
     onHitDetected
   });
@@ -184,21 +175,20 @@ export const DrumMachine = () => {
       setCurrentStep(0);
       setCurrentTimeInSeconds(0);
       setScrollPosition(0);
-      
       intervalRef.current = setInterval(() => {
         const timeElapsed = (Date.now() - startTime) / 1000;
         setCurrentTimeInSeconds(timeElapsed);
-        
+
         // Calculate current step based on time - ensure it starts from 0
         const newStep = Math.floor(timeElapsed * 4); // 4 steps per second
         setCurrentStep(newStep);
-        
+
         // Timeline-style scrolling: scroll to keep playhead in center-right of viewport
         const centerOffset = visibleSteps * 0.9; // Keep playhead at 90% of visible area (right side)
         const targetScrollPosition = Math.max(0, newStep - centerOffset);
         const maxScrollPosition = Math.max(0, totalSteps - visibleSteps);
         setScrollPosition(Math.min(targetScrollPosition, maxScrollPosition));
-        
+
         // Stop at 60 seconds and show summary
         if (timeElapsed >= 60) {
           setIsPlaying(false);
@@ -213,7 +203,6 @@ export const DrumMachine = () => {
         intervalRef.current = null;
       }
     }
-
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -227,7 +216,6 @@ export const DrumMachine = () => {
       playMetronome();
     }
   }, [currentStep, isPlaying, metronomeEnabled]);
-
   const playDrumSound = (drum: string) => {
     if (!audioContextRef.current) return;
     const context = audioContextRef.current;
@@ -429,7 +417,6 @@ export const DrumMachine = () => {
       clickOsc.stop(context.currentTime + 0.01);
     }
   };
-
   const playMetronome = () => {
     if (!audioContextRef.current) return;
     const context = audioContextRef.current;
@@ -444,7 +431,6 @@ export const DrumMachine = () => {
     oscillator.start(context.currentTime);
     oscillator.stop(context.currentTime + 0.05);
   };
-
   const togglePlay = () => {
     if (!isPlaying) {
       const resetNotes = scheduledNotes.map(note => ({
@@ -455,7 +441,7 @@ export const DrumMachine = () => {
         slightlyOff: false
       }));
       setNoteResults(resetNotes);
-      
+
       // Set timing immediately and precisely
       const now = Date.now();
       setStartTime(now);
@@ -467,7 +453,6 @@ export const DrumMachine = () => {
     }
     setIsPlaying(!isPlaying);
   };
-
   const toggleMicrophone = async () => {
     if (!hasPermission) {
       await initializeMicrophone();
@@ -476,7 +461,6 @@ export const DrumMachine = () => {
       setIsMicListening(!isMicListening);
     }
   };
-
   const reset = () => {
     setIsPlaying(false);
     setCurrentStep(0); // Reset to step 1 (index 0)
@@ -491,7 +475,6 @@ export const DrumMachine = () => {
       slightlyOff: false
     })));
   };
-
   const retryPractice = () => {
     setShowSummary(false);
     // Reset timing variables before starting again
@@ -500,7 +483,6 @@ export const DrumMachine = () => {
     setScrollPosition(0);
     togglePlay();
   };
-
   const restartPractice = () => {
     // Stop current practice and reset everything
     setIsPlaying(false);
@@ -508,7 +490,7 @@ export const DrumMachine = () => {
     setCurrentTimeInSeconds(0);
     setScrollPosition(0);
     setShowSummary(false);
-    
+
     // Reset note results
     const resetNotes = scheduledNotes.map(note => ({
       ...note,
@@ -518,7 +500,7 @@ export const DrumMachine = () => {
       slightlyOff: false
     }));
     setNoteResults(resetNotes);
-    
+
     // Start immediately
     setTimeout(() => {
       const now = Date.now();
@@ -527,11 +509,9 @@ export const DrumMachine = () => {
       console.log('Practice restarted - playhead at step 1');
     }, 50); // Small delay to ensure state is updated
   };
-
   const changeBpm = (delta: number) => {
     setBpm(prev => Math.max(60, Math.min(200, prev + delta)));
   };
-
   const toggleStep = (drum: string, step: number) => {
     // Only allow toggling if microphone is not listening (fallback click mode)
     if (!isMicListening) {
@@ -541,7 +521,6 @@ export const DrumMachine = () => {
       }));
     }
   };
-
   const clearPattern = () => {
     setPattern({
       kick: new Array(16).fill(false),
@@ -557,23 +536,15 @@ export const DrumMachine = () => {
       slightlyOff: false
     })));
   };
-
-  return (
-    <div className="min-h-screen bg-background p-6">
+  return <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header Controls */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon">
-              <RotateCcw className="h-5 w-5" />
-            </Button>
+            
             
             {/* Microphone Control */}
-            <Button
-              variant={isMicListening ? "default" : "outline"}
-              onClick={toggleMicrophone}
-              className="flex items-center gap-2"
-            >
+            <Button variant={isMicListening ? "default" : "outline"} onClick={toggleMicrophone} className="flex items-center gap-2">
               {isMicListening ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
               {hasPermission === null ? "Setup Mic" : isMicListening ? "Listening" : "Click Mode"}
             </Button>
@@ -598,27 +569,14 @@ export const DrumMachine = () => {
             </div>
 
             {/* Play Controls */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={togglePlay}
-              className="h-12 w-12 bg-primary/10 hover:bg-primary/20"
-            >
+            <Button variant="ghost" size="icon" onClick={togglePlay} className="h-12 w-12 bg-primary/10 hover:bg-primary/20">
               {isPlaying ? <Pause className="h-6 w-6 text-primary" /> : <Play className="h-6 w-6 text-primary" />}
             </Button>
 
-            <Button variant="ghost" size="icon" onClick={reset} className="h-12 w-12">
-              <RotateCcw className="h-5 w-5" />
-            </Button>
+            
 
             {/* Retry Button */}
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={restartPractice} 
-              className="h-12 w-12"
-              title="Restart Practice"
-            >
+            <Button variant="outline" size="icon" onClick={restartPractice} className="h-12 w-12" title="Restart Practice">
               <RefreshCw className="h-5 w-5" />
             </Button>
           </div>
@@ -629,51 +587,33 @@ export const DrumMachine = () => {
         </div>
 
         {/* Status Messages */}
-        {error && (
-          <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
+        {error && <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
             {error}
-          </div>
-        )}
+          </div>}
 
         {/* Pattern Instructions */}
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
-            {isMicListening 
-              ? "Make any sound every 5 seconds - timing is all that matters!" 
-              : "60-second practice pattern loaded - 1 note every 5 seconds"
-            }
+            {isMicListening ? "Make any sound every 5 seconds - timing is all that matters!" : "60-second practice pattern loaded - 1 note every 5 seconds"}
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            Time: {currentTimeInSeconds.toFixed(1)}s / 60.0s • Timeline Progress: {((currentStep / totalSteps) * 100).toFixed(1)}%
+            Time: {currentTimeInSeconds.toFixed(1)}s / 60.0s • Timeline Progress: {(currentStep / totalSteps * 100).toFixed(1)}%
           </p>
         </div>
 
         {/* Drum Grid */}
-        <DrumGrid
-          pattern={pattern}
-          currentStep={currentStep}
-          onStepToggle={toggleStep}
-          onClearPattern={clearPattern}
-          metronomeEnabled={metronomeEnabled}
-          onMetronomeToggle={() => setMetronomeEnabled(!metronomeEnabled)}
-          noteResults={noteResults}
-          isMicMode={isMicListening}
-          currentTimeInSeconds={currentTimeInSeconds}
-          scrollPosition={scrollPosition}
-        />
+        <DrumGrid pattern={pattern} currentStep={currentStep} onStepToggle={toggleStep} onClearPattern={clearPattern} metronomeEnabled={metronomeEnabled} onMetronomeToggle={() => setMetronomeEnabled(!metronomeEnabled)} noteResults={noteResults} isMicMode={isMicListening} currentTimeInSeconds={currentTimeInSeconds} scrollPosition={scrollPosition} />
 
         {/* Performance Summary */}
-        {showSummary && (
-          <div className="mt-8 bg-card rounded-lg p-6 shadow-elevated">
+        {showSummary && <div className="mt-8 bg-card rounded-lg p-6 shadow-elevated">
             <h3 className="text-2xl font-bold text-center mb-6 text-foreground">
               🎵 Your Performance Summary
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               {(() => {
-                const performance = calculatePerformance();
-                return (
-                  <>
+            const performance = calculatePerformance();
+            return <>
                     <div className="flex items-center gap-4 bg-green-500/10 rounded-lg p-4">
                       <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                         <span className="text-white font-bold">✓</span>
@@ -682,7 +622,7 @@ export const DrumMachine = () => {
                         <div className="text-2xl font-bold text-green-600">{performance.hits}</div>
                         <div className="text-sm text-muted-foreground">Perfect Timing</div>
                         <div className="text-xs text-muted-foreground">
-                          {((performance.hits / performance.total) * 100).toFixed(1)}%
+                          {(performance.hits / performance.total * 100).toFixed(1)}%
                         </div>
                       </div>
                     </div>
@@ -695,7 +635,7 @@ export const DrumMachine = () => {
                         <div className="text-2xl font-bold text-red-600">{performance.misses}</div>
                         <div className="text-sm text-muted-foreground">Missed Notes</div>
                         <div className="text-xs text-muted-foreground">
-                          {((performance.misses / performance.total) * 100).toFixed(1)}%
+                          {(performance.misses / performance.total * 100).toFixed(1)}%
                         </div>
                       </div>
                     </div>
@@ -708,35 +648,30 @@ export const DrumMachine = () => {
                         <div className="text-2xl font-bold text-yellow-600">{performance.mistakes}</div>
                         <div className="text-sm text-muted-foreground">Late/Early</div>
                         <div className="text-xs text-muted-foreground">
-                          {((performance.mistakes / performance.total) * 100).toFixed(1)}%
+                          {(performance.mistakes / performance.total * 100).toFixed(1)}%
                         </div>
                       </div>
                     </div>
-                  </>
-                );
-              })()}
+                  </>;
+          })()}
             </div>
 
             <div className="text-center space-y-4">
               {(() => {
-                const performance = calculatePerformance();
-                const accuracy = (performance.hits / performance.total) * 100;
-                
-                let message = "";
-                if (accuracy >= 90) {
-                  message = "🌟 Outstanding! Your timing is excellent!";
-                } else if (accuracy >= 75) {
-                  message = "🎯 Great job! Keep practicing to perfect your timing!";
-                } else if (accuracy >= 50) {
-                  message = "👍 Good effort! Focus on listening to the beat!";
-                } else {
-                  message = "🎵 Keep practicing! Every drummer started somewhere!";
-                }
-                
-                return (
-                  <p className="text-lg text-muted-foreground">{message}</p>
-                );
-              })()}
+            const performance = calculatePerformance();
+            const accuracy = performance.hits / performance.total * 100;
+            let message = "";
+            if (accuracy >= 90) {
+              message = "🌟 Outstanding! Your timing is excellent!";
+            } else if (accuracy >= 75) {
+              message = "🎯 Great job! Keep practicing to perfect your timing!";
+            } else if (accuracy >= 50) {
+              message = "👍 Good effort! Focus on listening to the beat!";
+            } else {
+              message = "🎵 Keep practicing! Every drummer started somewhere!";
+            }
+            return <p className="text-lg text-muted-foreground">{message}</p>;
+          })()}
               
               <div className="flex gap-4 justify-center">
                 <Button onClick={retryPractice} className="px-6">
@@ -747,9 +682,7 @@ export const DrumMachine = () => {
                 </Button>
               </div>
             </div>
-          </div>
-        )}
+          </div>}
       </div>
-    </div>
-  );
+    </div>;
 };
