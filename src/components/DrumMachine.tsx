@@ -32,33 +32,23 @@ interface PerformanceSummary {
   total: number;
 }
 
-// Generate a simpler song with half the notes - 60-second drum arrangement
+// Generate a simpler song with notes starting from 8 seconds (after the guideline)
 const generateFullSongPattern = () => {
   const totalDuration = 60; // 60 seconds
   const notes: ScheduledNote[] = [];
   let stepIndex = 0;
 
-  // Song structure with 2 steps per second (120 total steps) - reduced from 4 steps/second
+  // Song structure with 2 steps per second (120 total steps) - starting from 8 seconds
   const beatsPerSecond = 2;
   
   // Create drum patterns for different sections with 8th note intervals (0.5s)
+  // Starting all patterns from 8 seconds (after the yellow guideline)
   const createPattern = (startTime: number, endTime: number, patternType: string) => {
     for (let time = startTime; time < endTime; time += 0.5) { // 8th note intervals instead of 16th
       const beat = ((time - startTime) % 2) * 2; // Beat within measure (0-2)
       const measure = Math.floor((time - startTime) / 2); // Which measure
       
       switch (patternType) {
-        case 'intro': // Simple pattern (0-8s)
-          // Kick on 1 and 3 (every measure)
-          if (beat === 0) {
-            notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
-          }
-          // Hi-hat on every beat
-          if (beat % 1 === 0) {
-            notes.push({ time, instrument: 'hihat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
-          }
-          break;
-          
         case 'verse': // Standard rock beat (8-24s, 40-56s)
           // Kick on 1 and 3
           if (beat === 0 || (beat === 1 && measure % 2 === 0)) {
@@ -106,15 +96,14 @@ const generateFullSongPattern = () => {
     }
   };
 
-  // Build the simplified song structure
-  createPattern(0, 8, 'intro');      // 0-8s: Intro
-  createPattern(8, 24, 'verse');     // 8-24s: Verse 1
+  // Build the song structure starting from 8 seconds (removed intro section)
+  createPattern(8, 24, 'verse');     // 8-24s: Verse 1 (starts right at guideline)
   createPattern(24, 40, 'chorus');   // 24-40s: Chorus
   createPattern(40, 56, 'verse');    // 40-56s: Verse 2
   createPattern(56, 60, 'outro');    // 56-60s: Outro
 
-  // Add simple fills at section transitions (much simpler)
-  const fillTimes = [7.5, 23.5, 39.5, 55.5];
+  // Add simple fills at section transitions (starting from 8s)
+  const fillTimes = [23.5, 39.5, 55.5]; // Removed the 7.5s fill since it's before the guideline
   fillTimes.forEach(time => {
     if (time < 60) {
       // Just a single snare hit
@@ -122,7 +111,7 @@ const generateFullSongPattern = () => {
     }
   });
 
-  console.log(`Generated ${notes.length} notes for simplified song pattern`);
+  console.log(`Generated ${notes.length} notes for simplified song pattern (starting from 8s)`);
   return notes;
 };
 
