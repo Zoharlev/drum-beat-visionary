@@ -33,29 +33,23 @@ interface PerformanceSummary {
   total: number;
 }
 
-// Generate a song with intro hi-hat section and full song pattern
+// Generate a simpler song with notes starting from 8 seconds (after the guideline)
 const generateFullSongPattern = () => {
   const totalDuration = 60; // 60 seconds
   const notes: ScheduledNote[] = [];
   let stepIndex = 0;
 
-  // Song structure with 2 steps per second (120 total steps)
+  // Song structure with 2 steps per second (120 total steps) - starting from 8 seconds
   const beatsPerSecond = 2;
   
   // Create drum patterns for different sections with 8th note intervals (0.5s)
+  // Starting all patterns from 8 seconds (after the yellow guideline)
   const createPattern = (startTime: number, endTime: number, patternType: string) => {
-    for (let time = startTime; time < endTime; time += 0.5) { // 8th note intervals
+    for (let time = startTime; time < endTime; time += 0.5) { // 8th note intervals instead of 16th
       const beat = ((time - startTime) % 2) * 2; // Beat within measure (0-2)
       const measure = Math.floor((time - startTime) / 2); // Which measure
       
       switch (patternType) {
-        case 'intro': // Simple hi-hat intro (4-8s)
-          // Hi-hat on every beat
-          if (beat % 0.5 === 0) {
-            notes.push({ time, instrument: 'hihat', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
-          }
-          break;
-          
         case 'verse': // Standard rock beat (8-24s, 40-56s)
           // Kick on 1 and 3
           if (beat === 0 || (beat === 1 && measure % 2 === 0)) {
@@ -103,15 +97,14 @@ const generateFullSongPattern = () => {
     }
   };
 
-  // Build the song structure with intro section
-  createPattern(4, 8, 'intro');      // 4-8s: Hi-hat intro (measures 3, 4, 5)
-  createPattern(8, 24, 'verse');     // 8-24s: Verse 1 (starts at guideline)
+  // Build the song structure starting from 8 seconds (removed intro section)
+  createPattern(8, 24, 'verse');     // 8-24s: Verse 1 (starts right at guideline)
   createPattern(24, 40, 'chorus');   // 24-40s: Chorus
   createPattern(40, 56, 'verse');    // 40-56s: Verse 2
   createPattern(56, 60, 'outro');    // 56-60s: Outro
 
-  // Add simple fills at section transitions
-  const fillTimes = [7.5, 23.5, 39.5, 55.5]; // Added 7.5s fill before main song
+  // Add simple fills at section transitions (starting from 8s)
+  const fillTimes = [23.5, 39.5, 55.5]; // Removed the 7.5s fill since it's before the guideline
   fillTimes.forEach(time => {
     if (time < 60) {
       // Just a single snare hit
@@ -119,7 +112,7 @@ const generateFullSongPattern = () => {
     }
   });
 
-  console.log(`Generated ${notes.length} notes for song pattern with hi-hat intro (4-8s)`);
+  console.log(`Generated ${notes.length} notes for simplified song pattern (starting from 8s)`);
   return notes;
 };
 
@@ -787,8 +780,8 @@ export const DrumMachine = () => {
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isMicListening 
-              ? "🎵 Full drum song with hi-hat intro! Play any instrument at the right time!" 
-              : "🥁 Complete 60-second drum song with intro section (4-8s) and full arrangement"
+              ? "🎵 Full drum song loaded! Play any instrument at the right time!" 
+              : "🥁 Complete 60-second drum song with all instruments - Kick, Snare, Hi-Hat & Open Hat"
             }
           </p>
           <p className="text-sm text-muted-foreground mt-2">
