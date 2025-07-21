@@ -66,10 +66,15 @@ export const DrumMachine = () => {
   const [noteResults, setNoteResults] = useState<ScheduledNote[]>([]);
   const [pattern, setPattern] = useState<DrumPattern>(() => {
     const hihatPattern = new Array(16).fill(false);
-    hihatPattern[2] = true;
-    hihatPattern[6] = true;
-    hihatPattern[10] = true;
-    hihatPattern[14] = true;
+    // Add 8 hi-hat notes evenly distributed (every 2 steps)
+    hihatPattern[0] = true;   // Beat 1
+    hihatPattern[2] = true;   // Beat 1 &
+    hihatPattern[4] = true;   // Beat 2
+    hihatPattern[6] = true;   // Beat 2 &
+    hihatPattern[8] = true;   // Beat 3
+    hihatPattern[10] = true;  // Beat 3 &
+    hihatPattern[12] = true;  // Beat 4
+    hihatPattern[14] = true;  // Beat 4 &
 
     return {
       kick: new Array(16).fill(false),
@@ -1027,11 +1032,11 @@ export const DrumMachine = () => {
                 <div className="w-3 h-3 bg-primary rounded-full animate-pulse"></div>
                 <span className="text-primary font-medium">Session Progress</span>
                 <span className="text-muted-foreground">
-                  {completedNotesCount}/4 notes completed
+                  {completedNotesCount}/8 notes completed
                 </span>
               </div>
               <div className="text-sm text-muted-foreground">
-                {4 - completedNotesCount} notes remaining
+                {8 - completedNotesCount} notes remaining
               </div>
             </div>
           </div>
@@ -1108,7 +1113,7 @@ export const DrumMachine = () => {
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isPreviewPlaying ? "Preview playing - listen to the rhythm" : 
-             isPlaying ? "Hit the drums at the highlighted times - complete 4 notes!" : 
+             isPlaying ? "Hit the drums at the highlighted times - complete 8 notes!" : 
              "Click on the grid to add or remove notes"}
           </p>
           {isPlaying && (
