@@ -1,4 +1,3 @@
-
 import { useRef, useEffect, useState } from 'react';
 
 interface DetectedHit {
@@ -206,6 +205,7 @@ export const useMicrophoneDetection = ({ isListening, onHitDetected }: UseMicrop
   return {
     hasPermission,
     error,
-    initializeMicrophone
+    initializeMicrophone,
+    audioStream: streamRef.current // Expose the audio stream for recording
   };
 };

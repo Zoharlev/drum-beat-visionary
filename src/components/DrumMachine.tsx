@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, Circle, Square, Download, Trash2 } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
 import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
+import { useAudioRecording } from "@/hooks/useAudioRecording";
+
 interface DrumPattern {
   [key: string]: boolean[];
 }
+
 interface ScheduledNote {
   time: number;
   instrument: string;
@@ -16,12 +19,14 @@ interface ScheduledNote {
   wrongInstrument: boolean;
   slightlyOff: boolean;
 }
+
 interface DetectedHit {
   time: number;
   frequency: number;
   amplitude: number;
   isHiHat: boolean;
 }
+
 export const DrumMachine = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMicListening, setIsMicListening] = useState(false);
@@ -31,7 +36,6 @@ export const DrumMachine = () => {
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
 
-  // Schedule for the specific Hi-Hat pattern
   const [scheduledNotes] = useState<ScheduledNote[]>([{
     time: 0.25,
     instrument: "Hi-Hat",
@@ -80,11 +84,11 @@ export const DrumMachine = () => {
       openhat: new Array(16).fill(false)
     };
   });
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
+
   const onHitDetected = (hit: DetectedHit) => {
     if (!isPlaying || !isMicListening) {
       console.log('Hit detected but not in listening mode');
@@ -178,16 +182,33 @@ export const DrumMachine = () => {
       }
     }
   };
+
   const {
     hasPermission,
     error,
-    initializeMicrophone
+    initializeMicrophone,
+    audioStream
   } = useMicrophoneDetection({
     isListening: isMicListening,
     onHitDetected
   });
 
-  // Initialize audio context
+  const {
+    isRecording,
+    recordedBlob,
+    recordingDuration,
+    error: recordingError,
+    startRecording,
+    stopRecording,
+    clearRecording,
+    downloadRecording,
+    formatDuration,
+    getEstimatedSize,
+    canRecord
+  } = useAudioRecording({ 
+    stream: audioStream 
+  });
+
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     return () => {
@@ -195,7 +216,6 @@ export const DrumMachine = () => {
     };
   }, []);
 
-  // Step timing based on BPM
   const stepDuration = 60 / bpm / 4 * 1000; // 16th notes
 
   useEffect(() => {
@@ -222,12 +242,12 @@ export const DrumMachine = () => {
     };
   }, [isPlaying, stepDuration, startTime]);
 
-  // Play metronome only (no automatic drum sounds)
   useEffect(() => {
     if (isPlaying && metronomeEnabled && currentStep % 4 === 0) {
       playMetronome();
     }
   }, [currentStep, isPlaying, metronomeEnabled]);
+
   const playDrumSound = (drum: string) => {
     if (!audioContextRef.current) return;
     const context = audioContextRef.current;
@@ -429,6 +449,7 @@ export const DrumMachine = () => {
       clickOsc.stop(context.currentTime + 0.01);
     }
   };
+
   const playMetronome = () => {
     if (!audioContextRef.current) return;
     const context = audioContextRef.current;
@@ -443,6 +464,7 @@ export const DrumMachine = () => {
     oscillator.start(context.currentTime);
     oscillator.stop(context.currentTime + 0.05);
   };
+
   const togglePlay = () => {
     if (!isPlaying) {
       // Reset results when starting
@@ -467,6 +489,7 @@ export const DrumMachine = () => {
       });
     }
   };
+
   const toggleMicrophone = async () => {
     if (!hasPermission) {
       await initializeMicrophone();
@@ -479,6 +502,31 @@ export const DrumMachine = () => {
       });
     }
   };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+      toast({
+        title: "Recording stopped",
+        description: "Audio saved - ready to download"
+      });
+    } else {
+      if (canRecord) {
+        startRecording();
+        toast({
+          title: "Recording started",
+          description: "Capturing audio from microphone"
+        });
+      } else {
+        toast({
+          title: "Cannot record",
+          description: "Enable microphone access first",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
   const reset = () => {
     setIsPlaying(false);
     setCurrentStep(0);
@@ -494,9 +542,11 @@ export const DrumMachine = () => {
       description: "Pattern reset to beginning"
     });
   };
+
   const changeBpm = (delta: number) => {
     setBpm(prev => Math.max(60, Math.min(200, prev + delta)));
   };
+
   const toggleStep = (drum: string, step: number) => {
     // Only allow toggling if microphone is not listening (fallback click mode)
     if (!isMicListening) {
@@ -506,6 +556,7 @@ export const DrumMachine = () => {
       }));
     }
   };
+
   const clearPattern = () => {
     setPattern({
       kick: new Array(16).fill(false),
@@ -525,15 +576,29 @@ export const DrumMachine = () => {
       description: "All patterns cleared"
     });
   };
-  return <div className="min-h-screen bg-background p-6">
+
+  return (
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header Controls */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            
+            {/* Recording Control */}
+            <Button 
+              variant={isRecording ? "destructive" : "outline"} 
+              onClick={toggleRecording}
+              className="flex items-center gap-2"
+            >
+              {isRecording ? <Square className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+              {isRecording ? "Stop" : "Record"}
+            </Button>
             
             {/* Microphone Control */}
-            <Button variant={isMicListening ? "default" : "outline"} onClick={toggleMicrophone} className="flex items-center gap-2">
+            <Button 
+              variant={isMicListening ? "default" : "outline"} 
+              onClick={toggleMicrophone} 
+              className="flex items-center gap-2"
+            >
               {isMicListening ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
               {hasPermission === null ? "Setup Mic" : isMicListening ? "Listening" : "Click Mode"}
             </Button>
@@ -572,22 +637,81 @@ export const DrumMachine = () => {
           </Button>
         </div>
 
+        {/* Recording Status */}
+        {isRecording && (
+          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-destructive rounded-full animate-pulse"></div>
+              <span className="text-destructive font-medium">Recording</span>
+              <span className="text-muted-foreground">
+                {formatDuration(recordingDuration)} • {getEstimatedSize(recordingDuration)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Download Section */}
+        {recordedBlob && !isRecording && (
+          <div className="mb-4 p-4 bg-secondary rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="font-medium">Recording Complete</span>
+                <span className="text-muted-foreground">
+                  {formatDuration(recordingDuration)} • {getEstimatedSize(recordingDuration)}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={downloadRecording} className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Download
+                </Button>
+                <Button variant="outline" onClick={clearRecording} size="icon">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Status Messages */}
-        {error && <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
+        {error && (
+          <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
             {error}
-          </div>}
+          </div>
+        )}
+
+        {recordingError && (
+          <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
+            Recording Error: {recordingError}
+          </div>
+        )}
 
         {/* Pattern Instructions */}
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isMicListening ? "Hit the Hi-Hat at the highlighted times" : "Click on the grid to add or remove notes"}
           </p>
-          {isMicListening && <p className="text-sm text-muted-foreground mt-2">
-        </p>}
+          {isMicListening && (
+            <p className="text-sm text-muted-foreground mt-2">
+              {canRecord ? "Recording available" : "Enable microphone to record"}
+            </p>
+          )}
         </div>
 
         {/* Drum Grid */}
-        <DrumGrid pattern={pattern} currentStep={currentStep} onStepToggle={toggleStep} onClearPattern={clearPattern} metronomeEnabled={metronomeEnabled} onMetronomeToggle={() => setMetronomeEnabled(!metronomeEnabled)} noteResults={noteResults} isMicMode={isMicListening} currentTimeInSeconds={currentTimeInSeconds} />
+        <DrumGrid 
+          pattern={pattern} 
+          currentStep={currentStep} 
+          onStepToggle={toggleStep} 
+          onClearPattern={clearPattern} 
+          metronomeEnabled={metronomeEnabled} 
+          onMetronomeToggle={() => setMetronomeEnabled(!metronomeEnabled)} 
+          noteResults={noteResults} 
+          isMicMode={isMicListening} 
+          currentTimeInSeconds={currentTimeInSeconds} 
+        />
       </div>
-    </div>;
+    </div>
+  );
 };
