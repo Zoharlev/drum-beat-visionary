@@ -121,9 +121,9 @@ export const DrumMachine = () => {
     setNoteResults(newScheduledNotes.map(note => ({ ...note })));
   }, [pattern, bpm]);
 
-  // Auto-stop after 4 notes
+  // Auto-stop after 8 notes
   const checkAutoStop = () => {
-    if (completedNotesCount >= 4) {
+    if (completedNotesCount >= 8) {
       setIsPlaying(false);
       
       if (isRecording) {
@@ -137,7 +137,7 @@ export const DrumMachine = () => {
       
       toast({
         title: "Session Complete! 🎉",
-        description: "Completed 4 notes - check your results!"
+        description: "Completed 8 notes - check your results!"
       });
     }
   };
@@ -275,7 +275,7 @@ export const DrumMachine = () => {
               playFeedbackSound('perfect');
               playDrumSound(matchingNote.instrument);
               toast({
-                title: `Perfect hit! 🟢 (${completedNotesCount + 1}/4)`,
+                title: `Perfect hit! 🟢 (${completedNotesCount + 1}/8)`,
                 description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else if (closestTimeDiff <= goodWindow) {
@@ -287,7 +287,7 @@ export const DrumMachine = () => {
               playFeedbackSound('good');
               playDrumSound(matchingNote.instrument);
               toast({
-                title: `Good hit! 🟡 (${completedNotesCount + 1}/4)`,
+                title: `Good hit! 🟡 (${completedNotesCount + 1}/8)`,
                 description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else {
@@ -299,7 +299,7 @@ export const DrumMachine = () => {
               playFeedbackSound('slightly-off');
               playDrumSound(matchingNote.instrument);
               toast({
-                title: `Close! 🟠 (${completedNotesCount + 1}/4)`,
+                title: `Close! 🟠 (${completedNotesCount + 1}/8)`,
                 description: `${matchingNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             }
@@ -311,7 +311,7 @@ export const DrumMachine = () => {
             updateTimingStats('miss');
             playFeedbackSound('miss');
             toast({
-              title: `Wrong instrument 🔴 (${completedNotesCount + 1}/4)`,
+              title: `Wrong instrument 🔴 (${completedNotesCount + 1}/8)`,
               description: `Hit ${detectedInstrument} but expected ${matchingNote.instrument}`,
               variant: "destructive"
             });
