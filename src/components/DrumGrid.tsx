@@ -142,7 +142,6 @@ export const DrumGrid = ({
   // Calculate static yellow guideline position (at 2nd measure = 8 seconds = 32 steps)
   const guidelineStep = 32; // 8 seconds * 4 steps per second
   const isGuidelineVisible = guidelineStep >= startStep && guidelineStep <= endStep;
-  const guidelinePosition = isGuidelineVisible ? ((guidelineStep - startStep) / visibleSteps) * 100 : -100;
 
   return <div className="space-y-6">
       {/* Controls */}
@@ -166,7 +165,7 @@ export const DrumGrid = ({
             <div 
               className="absolute top-0 bottom-0 w-1 bg-yellow-400 z-20 opacity-80"
               style={{
-                left: `calc(88px + ${guidelinePosition}% * (100% - 88px) / 100%)`
+                left: 'calc(88px + 25%)'
               }}
             />
           )}
