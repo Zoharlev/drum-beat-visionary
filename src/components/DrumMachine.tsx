@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, RefreshCw, Circle, Square, Download, Trash2 } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, RefreshCw } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
-import { useAudioRecording } from "@/hooks/useAudioRecording";
 
 interface DrumPattern {
   [key: string]: boolean[];
@@ -33,24 +32,24 @@ interface PerformanceSummary {
   total: number;
 }
 
-// Generate a simpler song with notes starting from 8 seconds (after the guideline)
+// Generate a simpler song with notes starting from time 8
 const generateFullSongPattern = () => {
-  const totalDuration = 60; // 60 seconds
+  const totalDuration = 60; // 60 seconds total duration
   const notes: ScheduledNote[] = [];
   let stepIndex = 0;
 
-  // Song structure with 2 steps per second (120 total steps) - starting from 8 seconds
+  // Song structure with 2 steps per second - starting from 8 seconds
   const beatsPerSecond = 2;
   
   // Create drum patterns for different sections with 8th note intervals (0.5s)
-  // Starting all patterns from 8 seconds (after the yellow guideline)
+  // All patterns now start from 8 seconds
   const createPattern = (startTime: number, endTime: number, patternType: string) => {
     for (let time = startTime; time < endTime; time += 0.5) { // 8th note intervals instead of 16th
       const beat = ((time - startTime) % 2) * 2; // Beat within measure (0-2)
       const measure = Math.floor((time - startTime) / 2); // Which measure
       
       switch (patternType) {
-        case 'verse': // Standard rock beat (8-24s, 40-56s)
+        case 'verse': // Standard rock beat (0-16s, 32-48s)
           // Kick on 1 and 3
           if (beat === 0 || (beat === 1 && measure % 2 === 0)) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
@@ -65,7 +64,7 @@ const generateFullSongPattern = () => {
           }
           break;
           
-        case 'chorus': // More complex pattern (24-40s)
+        case 'chorus': // More complex pattern (16-32s)
           // Kick with some variation
           if (beat === 0 || (beat === 1 && measure % 4 === 1)) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
@@ -84,7 +83,7 @@ const generateFullSongPattern = () => {
           }
           break;
           
-        case 'outro': // Simple ending (56-60s)
+        case 'outro': // Simple ending (48-52s)
           // Just kick and hi-hat
           if (beat === 0) {
             notes.push({ time, instrument: 'kick', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
@@ -97,22 +96,22 @@ const generateFullSongPattern = () => {
     }
   };
 
-  // Build the song structure starting from 8 seconds (removed intro section)
-  createPattern(8, 24, 'verse');     // 8-24s: Verse 1 (starts right at guideline)
+  // Build the song structure starting from 8 seconds
+  createPattern(8, 24, 'verse');     // 8-24s: Verse 1 (starts from 8s)
   createPattern(24, 40, 'chorus');   // 24-40s: Chorus
   createPattern(40, 56, 'verse');    // 40-56s: Verse 2
   createPattern(56, 60, 'outro');    // 56-60s: Outro
 
-  // Add simple fills at section transitions (starting from 8s)
-  const fillTimes = [23.5, 39.5, 55.5]; // Removed the 7.5s fill since it's before the guideline
+  // Add simple fills at section transitions
+  const fillTimes = [23.5, 39.5, 55.5]; // Adjusted for timeline starting at 8s
   fillTimes.forEach(time => {
-    if (time < 60) {
+    if (time < totalDuration) {
       // Just a single snare hit
       notes.push({ time, instrument: 'snare', step: stepIndex++, hit: false, correct: false, wrongInstrument: false, slightlyOff: false });
     }
   });
 
-  console.log(`Generated ${notes.length} notes for simplified song pattern (starting from 8s)`);
+  console.log(`Generated ${notes.length} notes for song pattern (starting from 0s)`);
   return notes;
 };
 
@@ -133,7 +132,7 @@ export const DrumMachine = () => {
 
   // Generate pattern for grid display with all instruments
   const [pattern, setPattern] = useState<DrumPattern>(() => {
-    const totalSteps = Math.ceil(60 * 4); // 4 steps per second for 60 seconds
+    const totalSteps = Math.ceil(60 * 4); // Updated to 60 seconds
     const kickPattern = new Array(totalSteps).fill(false);
     const snarePattern = new Array(totalSteps).fill(false);
     const hihatPattern = new Array(totalSteps).fill(false);
@@ -236,24 +235,10 @@ export const DrumMachine = () => {
     }
   };
 
-  const { hasPermission, error, initializeMicrophone, stream } = useMicrophoneDetection({
+  const { hasPermission, error, initializeMicrophone } = useMicrophoneDetection({
     isListening: isMicListening,
     onHitDetected
   });
-
-  const {
-    isRecording,
-    duration: recordingDuration,
-    recordedBlob,
-    error: recordingError,
-    startRecording,
-    stopRecording,
-    downloadRecording,
-    clearRecording,
-    getFileSize,
-    formatDuration,
-    formatFileSize
-  } = useAudioRecording({ stream });
 
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -284,7 +269,7 @@ export const DrumMachine = () => {
         const maxScrollPosition = Math.max(0, totalSteps - visibleSteps);
         setScrollPosition(Math.min(targetScrollPosition, maxScrollPosition));
 
-        if (timeElapsed >= 60) {
+        if (timeElapsed >= 52) { // Updated to match new duration
           setIsPlaying(false);
           if (isMicListening) {
             setShowSummary(true);
@@ -555,17 +540,6 @@ export const DrumMachine = () => {
     }
   };
 
-  const handleRecordToggle = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      if (recordedBlob) {
-        clearRecording();
-      }
-      startRecording();
-    }
-  };
-
   const reset = () => {
     setIsPlaying(false);
     setCurrentStep(0);
@@ -657,28 +631,6 @@ export const DrumMachine = () => {
               {isMicListening ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
               {hasPermission === null ? "Setup Mic" : isMicListening ? "Listening" : "Click Mode"}
             </Button>
-
-            {/* Recording Control */}
-            {hasPermission && (
-              <Button
-                variant={isRecording ? "destructive" : "outline"}
-                onClick={handleRecordToggle}
-                className="flex items-center gap-2"
-                disabled={!hasPermission}
-              >
-                {isRecording ? (
-                  <>
-                    <Square className="h-4 w-4" />
-                    Stop Rec
-                  </>
-                ) : (
-                  <>
-                    <Circle className="h-4 w-4" />
-                    Record
-                  </>
-                )}
-              </Button>
-            )}
             
             {/* Tempo Controls */}
             <div className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg">
@@ -726,53 +678,10 @@ export const DrumMachine = () => {
           </Button>
         </div>
 
-        {/* Recording Status */}
-        {isRecording && (
-          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-destructive rounded-full animate-pulse"></div>
-              <span className="text-destructive font-medium">Recording</span>
-              <span className="text-muted-foreground">
-                {formatDuration(recordingDuration)}
-              </span>
-              <span className="text-muted-foreground text-sm">
-                ~{formatFileSize(recordingDuration * 8000)} {/* Estimate file size */}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Download Section */}
-        {recordedBlob && !isRecording && (
-          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-green-600 font-medium">Recording Complete</span>
-                <span className="text-muted-foreground">
-                  {formatDuration(recordingDuration)}
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {formatFileSize(getFileSize())}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={downloadRecording} size="sm" className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  Download
-                </Button>
-                <Button onClick={clearRecording} variant="outline" size="sm">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Status Messages */}
-        {(error || recordingError) && (
+        {error && (
           <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
-            {error || recordingError}
+            {error}
           </div>
         )}
 
@@ -781,11 +690,11 @@ export const DrumMachine = () => {
           <p className="text-muted-foreground text-lg">
             {isMicListening 
               ? "🎵 Full drum song loaded! Play any instrument at the right time!" 
-              : "🥁 Complete 60-second drum song with all instruments - Kick, Snare, Hi-Hat & Open Hat"
+              : "🥁 Complete 52-second drum song with all instruments - Kick, Snare, Hi-Hat & Open Hat"
             }
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            Time: {currentTimeInSeconds.toFixed(1)}s / 60.0s • Notes: {scheduledNotes.length} total • Progress: {(currentStep / totalSteps * 100).toFixed(1)}%
+            Time: {currentTimeInSeconds.toFixed(1)}s / 52.0s • Notes: {scheduledNotes.length} total • Progress: {(currentStep / totalSteps * 100).toFixed(1)}%
           </p>
         </div>
 
