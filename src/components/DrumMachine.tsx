@@ -492,12 +492,6 @@ export const DrumMachine = () => {
     })));
   };
 
-  const moveToStart = () => {
-    setCurrentStep(0);
-    setCurrentTimeInSeconds(0);
-    setScrollPosition(0);
-  };
-
   const retryPractice = () => {
     setShowSummary(false);
     // Reset timing variables before starting again
@@ -615,11 +609,6 @@ export const DrumMachine = () => {
 
             <Button variant="ghost" size="icon" onClick={reset} className="h-12 w-12">
               <RotateCcw className="h-5 w-5" />
-            </Button>
-
-            {/* Move to Start Button */}
-            <Button variant="outline" size="icon" onClick={moveToStart} className="h-12 w-12" title="Move to First Measure">
-              ⏮
             </Button>
 
             {/* Retry Button */}
