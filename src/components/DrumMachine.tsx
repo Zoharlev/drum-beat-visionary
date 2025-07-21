@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, Circle, Square, Download, Trash2, Volume2 } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
+import { TimingFeedback } from "./TimingFeedback";
 import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
@@ -27,6 +28,15 @@ interface DetectedHit {
   isHiHat: boolean;
 }
 
+interface TimingStats {
+  perfectHits: number;
+  goodHits: number;
+  missedHits: number;
+  totalHits: number;
+  currentStreak: number;
+  bestStreak: number;
+}
+
 export const DrumMachine = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
@@ -37,6 +47,18 @@ export const DrumMachine = () => {
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
+
+  // Timing feedback states
+  const [lastHitTiming, setLastHitTiming] = useState<number | null>(null);
+  const [lastHitAccuracy, setLastHitAccuracy] = useState<'perfect' | 'good' | 'slightly-off' | 'miss' | null>(null);
+  const [timingStats, setTimingStats] = useState<TimingStats>({
+    perfectHits: 0,
+    goodHits: 0,
+    missedHits: 0,
+    totalHits: 0,
+    currentStreak: 0,
+    bestStreak: 0
+  });
 
   const [scheduledNotes] = useState<ScheduledNote[]>([{
     time: 0.25,
@@ -92,75 +114,150 @@ export const DrumMachine = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const { toast } = useToast();
 
+  const updateTimingStats = (accuracy: 'perfect' | 'good' | 'slightly-off' | 'miss') => {
+    setTimingStats(prev => {
+      const newStats = { ...prev };
+      newStats.totalHits++;
+      
+      if (accuracy === 'perfect') {
+        newStats.perfectHits++;
+        newStats.currentStreak++;
+        newStats.bestStreak = Math.max(newStats.bestStreak, newStats.currentStreak);
+      } else if (accuracy === 'good') {
+        newStats.goodHits++;
+        newStats.currentStreak++;
+        newStats.bestStreak = Math.max(newStats.bestStreak, newStats.currentStreak);
+      } else {
+        newStats.missedHits++;
+        newStats.currentStreak = 0;
+      }
+      
+      return newStats;
+    });
+  };
+
+  const playFeedbackSound = (accuracy: 'perfect' | 'good' | 'slightly-off' | 'miss') => {
+    if (!audioContextRef.current) return;
+    const context = audioContextRef.current;
+    
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    
+    // Different tones for different accuracy levels
+    switch (accuracy) {
+      case 'perfect':
+        oscillator.frequency.setValueAtTime(800, context.currentTime);
+        gainNode.gain.setValueAtTime(0.3, context.currentTime);
+        break;
+      case 'good':
+        oscillator.frequency.setValueAtTime(600, context.currentTime);
+        gainNode.gain.setValueAtTime(0.25, context.currentTime);
+        break;
+      case 'slightly-off':
+        oscillator.frequency.setValueAtTime(400, context.currentTime);
+        gainNode.gain.setValueAtTime(0.2, context.currentTime);
+        break;
+      case 'miss':
+        oscillator.frequency.setValueAtTime(200, context.currentTime);
+        gainNode.gain.setValueAtTime(0.15, context.currentTime);
+        break;
+    }
+    
+    oscillator.type = 'sine';
+    gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.3);
+    
+    oscillator.start(context.currentTime);
+    oscillator.stop(context.currentTime + 0.3);
+  };
+
   const onHitDetected = (hit: DetectedHit) => {
     if (!isPlaying || !isMicListening) {
       console.log('Hit detected but not in listening mode');
       return;
     }
-    const currentTime = (Date.now() - startTime) / 1000; // Convert to seconds
+    const currentTime = (Date.now() - startTime) / 1000;
     setCurrentTimeInSeconds(currentTime);
-    const perfectWindow = 0.05; // ±0.05 seconds for perfect timing
-    const goodWindow = 0.1; // ±0.1 seconds for acceptable timing
+    const perfectWindow = 0.025; // ±25ms for perfect timing
+    const goodWindow = 0.05; // ±50ms for good timing
+    const acceptableWindow = 0.1; // ±100ms for acceptable timing
 
     console.log(`Hit at ${currentTime.toFixed(2)}s, looking for matches...`);
 
-    // Find if this hit matches any scheduled note within timing window
     let matchingNote = null;
     let closestTimeDiff = Infinity;
 
-    // Only consider notes that haven't been hit yet and are within timing window
     for (const note of noteResults) {
       const timeDiff = Math.abs(currentTime - note.time);
-      if (timeDiff <= goodWindow && !note.hit && timeDiff < closestTimeDiff) {
+      if (timeDiff <= acceptableWindow && !note.hit && timeDiff < closestTimeDiff) {
         matchingNote = note;
         closestTimeDiff = timeDiff;
       }
     }
+
     if (matchingNote) {
+      const actualTimeDiff = currentTime - matchingNote.time; // Negative = early, positive = late
+      setLastHitTiming(actualTimeDiff);
+      
       console.log(`Match found for note at ${matchingNote.time}s (diff: ${closestTimeDiff.toFixed(3)}s)`);
 
-      // Create updated results array
       const updatedResults = noteResults.map(note => {
         if (note === matchingNote) {
-          const updatedNote = {
-            ...note
-          };
+          const updatedNote = { ...note };
           updatedNote.hit = true;
+          
           if (hit.isHiHat) {
             if (closestTimeDiff <= perfectWindow) {
-              // Perfect timing
               updatedNote.correct = true;
               updatedNote.wrongInstrument = false;
               updatedNote.slightlyOff = false;
+              setLastHitAccuracy('perfect');
+              updateTimingStats('perfect');
+              playFeedbackSound('perfect');
               playDrumSound('hihat');
               toast({
                 title: "Perfect hit! 🟢",
-                description: `Excellent timing at ${matchingNote.time}s`
+                description: `Excellent timing (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
-              console.log('Perfect hi-hat hit!');
-            } else {
-              // Good timing but slightly off
+            } else if (closestTimeDiff <= goodWindow) {
               updatedNote.correct = false;
               updatedNote.wrongInstrument = false;
               updatedNote.slightlyOff = true;
+              setLastHitAccuracy('good');
+              updateTimingStats('good');
+              playFeedbackSound('good');
               playDrumSound('hihat');
               toast({
                 title: "Good hit! 🟡",
-                description: "Slightly off timing but close!"
+                description: `Good timing (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
-              console.log('Good hi-hat hit, slightly off timing');
+            } else {
+              updatedNote.correct = false;
+              updatedNote.wrongInstrument = false;
+              updatedNote.slightlyOff = true;
+              setLastHitAccuracy('slightly-off');
+              updateTimingStats('slightly-off');
+              playFeedbackSound('slightly-off');
+              playDrumSound('hihat');
+              toast({
+                title: "Close! 🟠",
+                description: `Slightly off timing (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
+              });
             }
           } else {
-            // Wrong instrument
             updatedNote.correct = false;
             updatedNote.wrongInstrument = true;
             updatedNote.slightlyOff = false;
+            setLastHitAccuracy('miss');
+            updateTimingStats('miss');
+            playFeedbackSound('miss');
             toast({
               title: "Wrong instrument 🔴",
               description: "Try hitting the Hi-Hat - good timing though!",
               variant: "destructive"
             });
-            console.log('Wrong instrument but good timing');
           }
           return updatedNote;
         }
@@ -168,10 +265,11 @@ export const DrumMachine = () => {
       });
       setNoteResults(updatedResults);
     } else {
-      // Hit detected but no matching note
       console.log('Hit detected but no matching scheduled note');
-
-      // Show feedback for any hit outside the timing windows
+      setLastHitAccuracy('miss');
+      updateTimingStats('miss');
+      playFeedbackSound('miss');
+      
       if (hit.isHiHat) {
         toast({
           title: "Hi-Hat detected",
@@ -540,6 +638,17 @@ export const DrumMachine = () => {
       setStartTime(Date.now());
       setCurrentStep(0);
       setCurrentTimeInSeconds(0);
+      // Reset timing feedback
+      setLastHitTiming(null);
+      setLastHitAccuracy(null);
+      setTimingStats({
+        perfectHits: 0,
+        goodHits: 0,
+        missedHits: 0,
+        totalHits: 0,
+        currentStreak: 0,
+        bestStreak: 0
+      });
       console.log('Practice started, timer reset');
     }
     setIsPlaying(!isPlaying);
@@ -600,6 +709,17 @@ export const DrumMachine = () => {
       wrongInstrument: false,
       slightlyOff: false
     })));
+    // Reset timing feedback
+    setLastHitTiming(null);
+    setLastHitAccuracy(null);
+    setTimingStats({
+      perfectHits: 0,
+      goodHits: 0,
+      missedHits: 0,
+      totalHits: 0,
+      currentStreak: 0,
+      bestStreak: 0
+    });
     toast({
       title: "Reset",
       description: "Pattern reset to beginning"
@@ -638,6 +758,17 @@ export const DrumMachine = () => {
       title: "Cleared",
       description: "All patterns cleared"
     });
+  };
+
+  // Calculate next beat time for anticipation
+  const getNextBeatTime = () => {
+    if (!isPlaying) return null;
+    
+    const nextNote = scheduledNotes.find(note => 
+      note.time > currentTimeInSeconds && !note.hit
+    );
+    
+    return nextNote ? nextNote.time : null;
   };
 
   return (
@@ -760,6 +891,18 @@ export const DrumMachine = () => {
             Recording Error: {recordingError}
           </div>
         )}
+
+        {/* Timing Feedback */}
+        <div className="mb-6">
+          <TimingFeedback 
+            lastHitTiming={lastHitTiming}
+            lastHitAccuracy={lastHitAccuracy}
+            stats={timingStats}
+            isListening={isMicListening}
+            nextBeatTime={getNextBeatTime()}
+            currentTime={currentTimeInSeconds}
+          />
+        </div>
 
         {/* Pattern Instructions */}
         <div className="text-center mb-6">
