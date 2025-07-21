@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, Circle, Square, Download, Trash2 } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, Circle, Square, Download, Trash2, Volume2 } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
 import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
@@ -29,8 +29,10 @@ interface DetectedHit {
 
 export const DrumMachine = () => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [isMicListening, setIsMicListening] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [previewStep, setPreviewStep] = useState(0);
   const [bpm, setBpm] = useState(120);
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
   const [startTime, setStartTime] = useState<number>(0);
@@ -86,6 +88,7 @@ export const DrumMachine = () => {
   });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const previewIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const { toast } = useToast();
 
@@ -218,6 +221,7 @@ export const DrumMachine = () => {
 
   const stepDuration = 60 / bpm / 4 * 1000; // 16th notes
 
+  // Main playback interval
   useEffect(() => {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
@@ -242,6 +246,44 @@ export const DrumMachine = () => {
     };
   }, [isPlaying, stepDuration, startTime]);
 
+  // Preview playback interval
+  useEffect(() => {
+    if (isPreviewPlaying) {
+      previewIntervalRef.current = setInterval(() => {
+        setPreviewStep(prev => {
+          const nextStep = (prev + 1) % 16;
+          
+          // Play sounds for the next step
+          if (pattern.kick[nextStep]) {
+            playDrumSound('kick');
+          }
+          if (pattern.snare[nextStep]) {
+            playDrumSound('snare');
+          }
+          if (pattern.hihat[nextStep]) {
+            playDrumSound('hihat');
+          }
+          if (pattern.openhat[nextStep]) {
+            playDrumSound('openhat');
+          }
+          
+          return nextStep;
+        });
+      }, stepDuration);
+    } else {
+      if (previewIntervalRef.current) {
+        clearInterval(previewIntervalRef.current);
+        previewIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (previewIntervalRef.current) {
+        clearInterval(previewIntervalRef.current);
+      }
+    };
+  }, [isPreviewPlaying, stepDuration, pattern]);
+
+  // Metronome for main playback
   useEffect(() => {
     if (isPlaying && metronomeEnabled && currentStep % 4 === 0) {
       playMetronome();
@@ -465,8 +507,27 @@ export const DrumMachine = () => {
     oscillator.stop(context.currentTime + 0.05);
   };
 
+  const togglePreview = () => {
+    if (isPreviewPlaying) {
+      setIsPreviewPlaying(false);
+      setPreviewStep(0);
+    } else {
+      setIsPreviewPlaying(true);
+      setPreviewStep(0);
+      toast({
+        title: "Preview started",
+        description: "Playing the programmed rhythm"
+      });
+    }
+  };
+
   const togglePlay = () => {
     if (!isPlaying) {
+      // Stop preview if it's running
+      if (isPreviewPlaying) {
+        setIsPreviewPlaying(false);
+        setPreviewStep(0);
+      }
       // Reset results when starting
       const resetNotes = scheduledNotes.map(note => ({
         ...note,
@@ -529,7 +590,9 @@ export const DrumMachine = () => {
 
   const reset = () => {
     setIsPlaying(false);
+    setIsPreviewPlaying(false);
     setCurrentStep(0);
+    setPreviewStep(0);
     setNoteResults(scheduledNotes.map(note => ({
       ...note,
       hit: false,
@@ -622,6 +685,17 @@ export const DrumMachine = () => {
               </Button>
             </div>
 
+            {/* Preview Control */}
+            <Button 
+              variant="outline" 
+              onClick={togglePreview}
+              disabled={isPlaying || isRecording}
+              className="flex items-center gap-2"
+            >
+              {isPreviewPlaying ? <Square className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              {isPreviewPlaying ? "Stop Preview" : "Preview"}
+            </Button>
+
             {/* Play Controls */}
             <Button variant="ghost" size="icon" onClick={togglePlay} className="h-12 w-12 bg-primary/10 hover:bg-primary/20">
               {isPlaying ? <Pause className="h-6 w-6 text-primary" /> : <Play className="h-6 w-6 text-primary" />}
@@ -690,7 +764,9 @@ export const DrumMachine = () => {
         {/* Pattern Instructions */}
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
-            {isMicListening ? "Hit the Hi-Hat at the highlighted times" : "Click on the grid to add or remove notes"}
+            {isPreviewPlaying ? "Preview playing - listen to the rhythm" : 
+             isMicListening ? "Hit the Hi-Hat at the highlighted times" : 
+             "Click on the grid to add or remove notes"}
           </p>
           {isMicListening && (
             <p className="text-sm text-muted-foreground mt-2">
@@ -702,7 +778,7 @@ export const DrumMachine = () => {
         {/* Drum Grid */}
         <DrumGrid 
           pattern={pattern} 
-          currentStep={currentStep} 
+          currentStep={isPreviewPlaying ? previewStep : currentStep} 
           onStepToggle={toggleStep} 
           onClearPattern={clearPattern} 
           metronomeEnabled={metronomeEnabled} 
