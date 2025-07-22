@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, Circle, Square, Download, Trash2, Volume2 } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings, Plus, Minus, Mic, MicOff, Circle, Square, Download, Trash2, Volume2, Clock8, Target } from "lucide-react";
 import { DrumGrid } from "./DrumGrid";
 import { TimingFeedback } from "./TimingFeedback";
+import { TimerDisplay } from "./TimerDisplay";
 import { useToast } from "@/hooks/use-toast";
 import { useMicrophoneDetection } from "@/hooks/useMicrophoneDetection";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
+import { useSessionTimer } from "@/hooks/useSessionTimer";
 import { SessionSummary } from "./SessionSummary";
 
 interface DrumPattern {
@@ -46,6 +48,12 @@ export const DrumMachine = () => {
   const [previewStep, setPreviewStep] = useState(0);
   const [bpm, setBpm] = useState(60);
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
+
+  // Timer mode state
+  const [isTimerMode, setIsTimerMode] = useState(false);
+  const [currentLoop, setCurrentLoop] = useState(1);
+  const [currentSequenceNote, setCurrentSequenceNote] = useState(1);
+
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
   const [completedNotesCount, setCompletedNotesCount] = useState(0);
@@ -96,6 +104,26 @@ export const DrumMachine = () => {
   const [sessionStartTime, setSessionStartTime] = useState<number>(0);
   const [sessionDuration, setSessionDuration] = useState<number>(0);
 
+  // Timer hook
+  const timer = useSessionTimer({
+    duration: 60,
+    onComplete: () => {
+      setSessionCompleted(true);
+      setIsPlaying(false);
+      if (isRecording) {
+        stopRecording();
+      }
+      const duration = (Date.now() - sessionStartTime) / 1000;
+      setSessionDuration(duration);
+      setShowSessionSummary(true);
+      toast({
+        title: "60-Second Session Complete! 🎉",
+        description: `Completed ${currentLoop} loops with ${timingStats.totalHits} total hits!`
+      });
+    },
+    isActive: isTimerMode && isPlaying
+  });
+
   // Generate scheduled notes from pattern
   const generateScheduledNotes = (pattern: DrumPattern, bpm: number) => {
     const stepDuration = 60 / bpm / 4; // Duration of each 16th note in seconds
@@ -127,25 +155,44 @@ export const DrumMachine = () => {
     setNoteResults(newScheduledNotes.map(note => ({ ...note })));
   }, [pattern, bpm]);
 
-  // Auto-stop after 8 notes - now accepts count parameter
+  // Modified auto-stop logic for timer mode
   const checkAutoStop = (currentCount: number) => {
-    if (currentCount >= 8 && !sessionCompleted) {
-      setSessionCompleted(true); // Prevent multiple stops
-      setIsPlaying(false);
-      
-      if (isRecording) {
-        stopRecording();
+    if (isTimerMode) {
+      // In timer mode, reset after 8 notes and continue
+      if (currentCount >= 8) {
+        setCurrentLoop(prev => prev + 1);
+        setCompletedNotesCount(0);
+        setCurrentSequenceNote(1);
+        
+        // Reset note results for next loop
+        const resetNotes = generateScheduledNotes(pattern, bpm);
+        setNoteResults(resetNotes);
+        setScheduledNotes(resetNotes);
+        
+        toast({
+          title: `Loop ${currentLoop} Complete! 🔄`,
+          description: "Starting next loop..."
+        });
       }
-      
-      // Calculate session duration and show summary
-      const duration = (Date.now() - sessionStartTime) / 1000;
-      setSessionDuration(duration);
-      setShowSessionSummary(true);
-      
-      toast({
-        title: "Session Complete! 🎉",
-        description: "Completed 8 notes - check your results!"
-      });
+    } else {
+      // Original 8-note mode logic
+      if (currentCount >= 8 && !sessionCompleted) {
+        setSessionCompleted(true);
+        setIsPlaying(false);
+        
+        if (isRecording) {
+          stopRecording();
+        }
+        
+        const duration = (Date.now() - sessionStartTime) / 1000;
+        setSessionDuration(duration);
+        setShowSessionSummary(true);
+        
+        toast({
+          title: "Session Complete! 🎉",
+          description: "Completed 8 notes - check your results!"
+        });
+      }
     }
   };
 
@@ -170,10 +217,16 @@ export const DrumMachine = () => {
       return newStats;
     });
     
+    // Update sequence note counter
+    setCurrentSequenceNote(prev => {
+      const newNote = prev < 8 ? prev + 1 : prev;
+      return newNote;
+    });
+    
     // Increment completed notes and check for auto-stop with new count
     setCompletedNotesCount(prev => {
       const newCount = prev + 1;
-      checkAutoStop(newCount); // Pass the new count directly
+      checkAutoStop(newCount);
       return newCount;
     });
   };
@@ -718,6 +771,8 @@ export const DrumMachine = () => {
       setLastHitTiming(null);
       setLastHitAccuracy(null);
       setCompletedNotesCount(0);
+      setCurrentSequenceNote(1);
+      setCurrentLoop(1);
       setSessionCompleted(false);
       setTimingStats({
         perfectHits: 0,
@@ -727,8 +782,20 @@ export const DrumMachine = () => {
         currentStreak: 0,
         bestStreak: 0
       });
+      
+      // Start timer if in timer mode
+      if (isTimerMode) {
+        timer.resetTimer();
+        timer.startTimer();
+      }
+      
       console.log('Practice started, timer reset');
     } else {
+      // Stop timer if running
+      if (isTimerMode) {
+        timer.stopTimer();
+      }
+      
       // Calculate session duration when stopping
       const duration = (Date.now() - sessionStartTime) / 1000;
       setSessionDuration(duration);
@@ -743,9 +810,29 @@ export const DrumMachine = () => {
     if (!isPlaying) {
       toast({
         title: "Practice started",
-        description: "Hit 8 notes to complete the session!"
+        description: isTimerMode ? "60-second timer started!" : "Hit 8 notes to complete the session!"
       });
     }
+  };
+
+  const toggleTimerMode = () => {
+    if (isPlaying || isRecording) {
+      toast({
+        title: "Cannot change mode",
+        description: "Stop current session first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsTimerMode(!isTimerMode);
+    // Reset everything when switching modes
+    reset();
+    
+    toast({
+      title: isTimerMode ? "Switched to 8-Note Mode" : "Switched to 60-Second Mode",
+      description: isTimerMode ? "Complete 8 notes to finish" : "Practice for 60 seconds with continuous loops"
+    });
   };
 
   const toggleMicrophone = async () => {
@@ -793,6 +880,8 @@ export const DrumMachine = () => {
           setLastHitTiming(null);
           setLastHitAccuracy(null);
           setCompletedNotesCount(0);
+          setCurrentSequenceNote(1);
+          setCurrentLoop(1);
           setSessionCompleted(false);
           setTimingStats({
             perfectHits: 0,
@@ -838,6 +927,11 @@ export const DrumMachine = () => {
     setPreviewStep(0);
     setShowSessionSummary(false);
     setSessionCompleted(false);
+    setCurrentLoop(1);
+    setCurrentSequenceNote(1);
+    
+    // Reset timer
+    timer.resetTimer();
     
     // Reset all timing data
     const resetNotes = generateScheduledNotes(pattern, bpm);
@@ -912,6 +1006,8 @@ export const DrumMachine = () => {
     setLastHitTiming(null);
     setLastHitAccuracy(null);
     setCompletedNotesCount(0);
+    setCurrentSequenceNote(1);
+    setCurrentLoop(1);
     setSessionCompleted(false);
     setTimingStats({
       perfectHits: 0,
@@ -964,6 +1060,17 @@ export const DrumMachine = () => {
         {/* Header Controls */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
+            {/* Mode Toggle */}
+            <Button 
+              variant={isTimerMode ? "default" : "outline"} 
+              onClick={toggleTimerMode}
+              className="flex items-center gap-2"
+              disabled={isPlaying || isRecording}
+            >
+              {isTimerMode ? <Clock8 className="h-4 w-4" /> : <Target className="h-4 w-4" />}
+              {isTimerMode ? "60s Mode" : "8-Note Mode"}
+            </Button>
+            
             {/* Recording Control */}
             <Button 
               variant={isRecording ? "destructive" : "outline"} 
@@ -1029,19 +1136,41 @@ export const DrumMachine = () => {
           </Button>
         </div>
 
-        {/* Progress Display */}
+        {/* Timer Display */}
+        {isTimerMode && (
+          <div className="mb-6">
+            <TimerDisplay
+              timeRemaining={timer.timeRemaining}
+              formatTime={timer.formatTime()}
+              progress={timer.progress}
+              isActive={isPlaying}
+              currentLoop={currentLoop}
+              currentNote={currentSequenceNote}
+            />
+          </div>
+        )}
+
+        {/* Progress Display - Updated for both modes */}
         {isPlaying && (
           <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 bg-primary rounded-full animate-pulse"></div>
-                <span className="text-primary font-medium">Session Progress</span>
+                <span className="text-primary font-medium">
+                  {isTimerMode ? "Timer Session Progress" : "Session Progress"}
+                </span>
                 <span className="text-muted-foreground">
-                  {completedNotesCount}/8 notes completed
+                  {isTimerMode ? 
+                    `Loop ${currentLoop} • Note ${currentSequenceNote}/8` : 
+                    `${completedNotesCount}/8 notes completed`
+                  }
                 </span>
               </div>
               <div className="text-sm text-muted-foreground">
-                {8 - completedNotesCount} notes remaining
+                {isTimerMode ? 
+                  `${timer.timeRemaining}s remaining` : 
+                  `${8 - completedNotesCount} notes remaining`
+                }
               </div>
             </div>
           </div>
@@ -1114,11 +1243,11 @@ export const DrumMachine = () => {
           />
         </div>
 
-        {/* Pattern Instructions */}
+        {/* Pattern Instructions - Updated */}
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isPreviewPlaying ? "Preview playing - listen to the rhythm" : 
-             isPlaying ? "Hit the drums at the highlighted times - complete 8 notes!" : 
+             isPlaying ? (isTimerMode ? "Hit the drums for 60 seconds - loops automatically!" : "Hit the drums at the highlighted times - complete 8 notes!") : 
              "Click on the grid to add or remove notes"}
           </p>
           {isPlaying && (
