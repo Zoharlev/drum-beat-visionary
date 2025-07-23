@@ -1,5 +1,5 @@
 
-import { Check, X, Target, TrendingUp, Clock, Award, RotateCcw, Play, Repeat, Zap } from "lucide-react";
+import { Check, X, Target, TrendingUp, Clock, Award, RotateCcw, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,9 +19,6 @@ interface SessionSummaryProps {
   onClose: () => void;
   onPlayAgain: () => void;
   onReset: () => void;
-  currentLoop?: number;
-  totalNotesHit?: number;
-  notesPerMinute?: number;
 }
 
 export const SessionSummary = ({
@@ -30,12 +27,9 @@ export const SessionSummary = ({
   isVisible,
   onClose,
   onPlayAgain,
-  onReset,
-  currentLoop = 0,
-  totalNotesHit = 0,
-  notesPerMinute = 0
+  onReset
 }: SessionSummaryProps) => {
-  if (!isVisible) return;
+  if (!isVisible) return null;
 
   const accuracyPercentage = stats.totalHits > 0 
     ? Math.round(((stats.perfectHits + stats.goodHits) / stats.totalHits) * 100)
@@ -56,8 +50,6 @@ export const SessionSummary = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isTimerSession = sessionDuration >= 50; // Assume timer session if close to 60 seconds
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-background border rounded-lg shadow-lg max-w-md w-full p-6 animate-scale-in">
@@ -69,13 +61,11 @@ export const SessionSummary = ({
               {performance.grade}
             </div>
           </div>
-          <h2 className="text-2xl font-bold mb-1">
-            {isTimerSession ? "60-Second Session Complete!" : "Session Complete!"}
-          </h2>
+          <h2 className="text-2xl font-bold mb-1">Session Complete!</h2>
           <p className="text-muted-foreground">{performance.message}</p>
         </div>
 
-        {/* Key Stats Grid */}
+        {/* Key Stats */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="text-center p-4 bg-secondary rounded-lg">
             <div className={cn(
@@ -96,25 +86,6 @@ export const SessionSummary = ({
             <div className="text-sm text-muted-foreground">Best Streak</div>
           </div>
         </div>
-
-        {/* Timer Session Specific Stats */}
-        {isTimerSession && (
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="text-center p-4 bg-purple-500/10 rounded-lg">
-              <div className="text-3xl font-bold mb-1 text-purple-500">
-                {currentLoop}
-              </div>
-              <div className="text-sm text-muted-foreground">Loops Completed</div>
-            </div>
-            
-            <div className="text-center p-4 bg-blue-500/10 rounded-lg">
-              <div className="text-3xl font-bold mb-1 text-blue-500">
-                {notesPerMinute}
-              </div>
-              <div className="text-sm text-muted-foreground">Notes/Min</div>
-            </div>
-          </div>
-        )}
 
         {/* Detailed Stats */}
         <div className="space-y-3 mb-6">
@@ -142,16 +113,6 @@ export const SessionSummary = ({
             <span className="text-red-500 font-bold">{stats.missedHits}</span>
           </div>
 
-          {isTimerSession && (
-            <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-primary" />
-                <span className="text-primary font-medium">Total Notes Hit</span>
-              </div>
-              <span className="text-primary font-bold">{totalNotesHit}</span>
-            </div>
-          )}
-
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-muted-foreground" />
@@ -164,8 +125,8 @@ export const SessionSummary = ({
         {/* Action Buttons */}
         <div className="flex gap-3">
           <Button onClick={onPlayAgain} className="flex-1 flex items-center gap-2">
-            {isTimerSession ? <Repeat className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {isTimerSession ? "Another 60s" : "Practice Again"}
+            <Play className="h-4 w-4" />
+            Practice Again
           </Button>
           
           <Button variant="outline" onClick={onReset} className="flex items-center gap-2">
