@@ -1,5 +1,5 @@
 
-import { Check, X, Target, TrendingUp, Clock, Award, RotateCcw, Play, Repeat, Zap } from "lucide-react";
+import { Check, X, Target, TrendingUp, Clock, Award, RotateCcw, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,11 +19,6 @@ interface SessionSummaryProps {
   onClose: () => void;
   onPlayAgain: () => void;
   onReset: () => void;
-  // New props for continuous mode
-  totalLoops?: number;
-  currentNoteIndex?: number;
-  totalNotesHit?: number;
-  notesPerMinute?: number;
 }
 
 export const SessionSummary = ({
@@ -32,11 +27,7 @@ export const SessionSummary = ({
   isVisible,
   onClose,
   onPlayAgain,
-  onReset,
-  totalLoops = 0,
-  currentNoteIndex = 0,
-  totalNotesHit = 0,
-  notesPerMinute = 0
+  onReset
 }: SessionSummaryProps) => {
   if (!isVisible) return null;
 
@@ -59,12 +50,6 @@ export const SessionSummary = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Calculate loop completion details
-  const fullLoopsCompleted = totalLoops;
-  const partialLoopNotes = currentNoteIndex;
-  const totalPossibleNotes = Math.floor(sessionDuration / (60/60)) * 8; // Approximate max notes possible
-  const completionRate = totalPossibleNotes > 0 ? Math.round((totalNotesHit / totalPossibleNotes) * 100) : 0;
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-background border rounded-lg shadow-lg max-w-md w-full p-6 animate-scale-in">
@@ -76,57 +61,29 @@ export const SessionSummary = ({
               {performance.grade}
             </div>
           </div>
-          <h2 className="text-2xl font-bold mb-1">60-Second Session Complete!</h2>
+          <h2 className="text-2xl font-bold mb-1">Session Complete!</h2>
           <p className="text-muted-foreground">{performance.message}</p>
         </div>
 
         {/* Key Stats */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="text-center p-3 bg-secondary rounded-lg">
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="text-center p-4 bg-secondary rounded-lg">
             <div className={cn(
-              "text-2xl font-bold mb-1",
+              "text-3xl font-bold mb-1",
               accuracyPercentage >= 90 ? "text-green-500" :
               accuracyPercentage >= 70 ? "text-yellow-500" :
               "text-red-500"
             )}>
               {accuracyPercentage}%
             </div>
-            <div className="text-xs text-muted-foreground">Accuracy</div>
+            <div className="text-sm text-muted-foreground">Accuracy</div>
           </div>
           
-          <div className="text-center p-3 bg-secondary rounded-lg">
-            <div className="text-2xl font-bold mb-1 text-primary">
+          <div className="text-center p-4 bg-secondary rounded-lg">
+            <div className="text-3xl font-bold mb-1 text-primary">
               {stats.bestStreak}
             </div>
-            <div className="text-xs text-muted-foreground">Best Streak</div>
-          </div>
-
-          <div className="text-center p-3 bg-secondary rounded-lg">
-            <div className="text-2xl font-bold mb-1 text-blue-500">
-              {notesPerMinute}
-            </div>
-            <div className="text-xs text-muted-foreground">Notes/Min</div>
-          </div>
-        </div>
-
-        {/* Loop Progress */}
-        <div className="mb-6 p-4 bg-primary/10 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Repeat className="h-5 w-5 text-primary" />
-              <span className="text-primary font-medium">Loop Progress</span>
-            </div>
-            <span className="text-primary font-bold">
-              {fullLoopsCompleted} {fullLoopsCompleted === 1 ? 'loop' : 'loops'} completed
-            </span>
-          </div>
-          {partialLoopNotes > 0 && (
-            <p className="text-sm text-muted-foreground">
-              + {partialLoopNotes} notes in current loop
-            </p>
-          )}
-          <div className="mt-2 text-sm text-muted-foreground">
-            Total notes hit: {totalNotesHit}
+            <div className="text-sm text-muted-foreground">Best Streak</div>
           </div>
         </div>
 
@@ -163,14 +120,6 @@ export const SessionSummary = ({
             </div>
             <span className="font-bold">{formatDuration(sessionDuration)}</span>
           </div>
-
-          <div className="flex items-center justify-between p-3 bg-blue-500/10 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-blue-500" />
-              <span className="text-blue-500 font-medium">Performance</span>
-            </div>
-            <span className="text-blue-500 font-bold">{notesPerMinute} NPM</span>
-          </div>
         </div>
 
         {/* Action Buttons */}
@@ -193,4 +142,3 @@ export const SessionSummary = ({
     </div>
   );
 };
-
