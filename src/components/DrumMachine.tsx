@@ -126,56 +126,6 @@ export const DrumMachine = () => {
     return notes.sort((a, b) => a.time - b.time);
   };
 
-  // Update scheduled notes when pattern or BPM changes
-  useEffect(() => {
-    const newScheduledNotes = generateScheduledNotes(pattern, bpm);
-    setScheduledNotes(newScheduledNotes);
-    setNoteResults(newScheduledNotes.map(note => ({ ...note })));
-  }, [pattern, bpm]);
-
-  // Timer countdown effect
-  useEffect(() => {
-    if (isTimerActive && sessionTimer > 0) {
-      timerIntervalRef.current = setInterval(() => {
-        setSessionTimer(prev => {
-          if (prev <= 1) {
-            // Stop session when timer reaches 0
-            setIsPlaying(false);
-            setIsTimerActive(false);
-            
-            if (isRecording) {
-              stopRecording();
-            }
-            
-            // Calculate session duration and show summary
-            const duration = (Date.now() - sessionStartTime) / 1000;
-            setSessionDuration(duration);
-            setShowSessionSummary(true);
-            
-            toast({
-              title: "Session Complete! 🎉",
-              description: `Completed ${currentLoop} loops in 60 seconds!`
-            });
-            
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
-    }
-    
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    };
-  }, [isTimerActive, sessionTimer, isRecording, currentLoop, sessionStartTime]);
-
   const updateTimingStats = (accuracy: 'perfect' | 'good' | 'slightly-off' | 'miss') => {
     setTimingStats(prev => {
       const newStats = { ...prev };
@@ -262,296 +212,6 @@ export const DrumMachine = () => {
     
     return 'unknown';
   };
-
-  const onHitDetected = (hit: DetectedHit) => {
-    if (!isPlaying) {
-      console.log('Hit detected but not playing');
-      return;
-    }
-
-    const currentTime = (Date.now() - startTime) / 1000;
-    setCurrentTimeInSeconds(currentTime);
-    
-    // Stricter timing windows for per-note evaluation
-    const perfectWindow = 0.015; // ±15ms for perfect timing
-    const goodWindow = 0.025; // ±25ms for good timing
-    const acceptableWindow = 0.04; // ±40ms for acceptable timing
-
-    console.log(`Hit at ${currentTime.toFixed(3)}s, checking note ${currentNoteIndex + 1}/8 in loop ${currentLoop + 1}...`);
-
-    const detectedInstrument = detectInstrumentFromHit(hit);
-    
-    // Get the current expected note based on sequence position
-    const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
-    const expectedNote = sortedNotes[currentNoteIndex];
-    
-    if (!expectedNote) {
-      console.log('No expected note found');
-      return;
-    }
-
-    // Calculate expected time considering current loop
-    const loopDuration = 60 / bpm; // 4 beats at current BPM
-    const expectedTimeInCurrentLoop = (currentLoop * loopDuration) + expectedNote.time;
-    
-    // Check if we're within the acceptable timing window of the expected note
-    const timeDiff = Math.abs(currentTime - expectedTimeInCurrentLoop);
-    const actualTimeDiff = currentTime - expectedTimeInCurrentLoop;
-    
-    console.log(`Expected note ${currentNoteIndex + 1} at ${expectedTimeInCurrentLoop.toFixed(3)}s, timing diff: ${actualTimeDiff.toFixed(3)}s`);
-
-    if (timeDiff <= acceptableWindow) {
-      setLastHitTiming(actualTimeDiff);
-      
-      // Check if correct instrument
-      const isCorrectInstrument = detectedInstrument === expectedNote.instrument;
-      
-      if (isCorrectInstrument) {
-        // Update the note result
-        const updatedResults = noteResults.map(note => {
-          if (note.time === expectedNote.time && note.instrument === expectedNote.instrument) {
-            const updatedNote = { ...note };
-            updatedNote.hit = true;
-            
-            if (timeDiff <= perfectWindow) {
-              updatedNote.correct = true;
-              updatedNote.wrongInstrument = false;
-              updatedNote.slightlyOff = false;
-              setLastHitAccuracy('perfect');
-              updateTimingStats('perfect');
-              playFeedbackSound('perfect');
-              playDrumSound(expectedNote.instrument);
-              toast({
-                title: `Perfect Strike! 🟢 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
-                description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
-              });
-            } else if (timeDiff <= goodWindow) {
-              updatedNote.correct = false;
-              updatedNote.wrongInstrument = false;
-              updatedNote.slightlyOff = true;
-              setLastHitAccuracy('good');
-              updateTimingStats('good');
-              playFeedbackSound('good');
-              playDrumSound(expectedNote.instrument);
-              toast({
-                title: `Good Hit! 🟡 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
-                description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
-              });
-            } else {
-              updatedNote.correct = false;
-              updatedNote.wrongInstrument = false;
-              updatedNote.slightlyOff = true;
-              setLastHitAccuracy('slightly-off');
-              updateTimingStats('slightly-off');
-              playFeedbackSound('slightly-off');
-              playDrumSound(expectedNote.instrument);
-              toast({
-                title: `Close! 🟠 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
-                description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
-              });
-            }
-            return updatedNote;
-          }
-          return note;
-        });
-        setNoteResults(updatedResults);
-      } else {
-        // Wrong instrument but correct timing window
-        const updatedResults = noteResults.map(note => {
-          if (note.time === expectedNote.time && note.instrument === expectedNote.instrument) {
-            const updatedNote = { ...note };
-            updatedNote.hit = true;
-            updatedNote.correct = false;
-            updatedNote.wrongInstrument = true;
-            updatedNote.slightlyOff = false;
-            return updatedNote;
-          }
-          return note;
-        });
-        setNoteResults(updatedResults);
-        
-        setLastHitAccuracy('miss');
-        updateTimingStats('miss');
-        playFeedbackSound('miss');
-        toast({
-          title: `Wrong Instrument 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
-          description: `Hit ${detectedInstrument} but expected ${expectedNote.instrument}`,
-          variant: "destructive"
-        });
-      }
-    } else {
-      // Hit is outside the timing window for the expected note
-      console.log(`Hit outside timing window for note ${currentNoteIndex + 1} (${timeDiff.toFixed(3)}s off)`);
-      setLastHitAccuracy('miss');
-      updateTimingStats('miss');
-      playFeedbackSound('miss');
-      
-      // Don't update note results - this hit doesn't count for any note
-      toast({
-        title: `Timing Miss 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
-        description: `Hit too ${actualTimeDiff < 0 ? 'early' : 'late'} for note ${currentNoteIndex + 1} (${Math.round(Math.abs(actualTimeDiff) * 1000)}ms off)`,
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Monitor for missed beats with per-note timing
-  useEffect(() => {
-    if (isPlaying && isTimerActive) {
-      missedBeatIntervalRef.current = setInterval(() => {
-        const currentTime = (Date.now() - startTime) / 1000;
-        
-        // Check if current expected note has been missed
-        const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
-        const expectedNote = sortedNotes[currentNoteIndex];
-        
-        if (expectedNote) {
-          const loopDuration = 60 / bpm;
-          const expectedTimeInCurrentLoop = (currentLoop * loopDuration) + expectedNote.time;
-          
-          if (currentTime > expectedTimeInCurrentLoop + 0.04) { // 40ms grace period
-            // Mark this note as missed and advance
-            const updatedResults = noteResults.map(note => {
-              if (note.time === expectedNote.time && note.instrument === expectedNote.instrument && !note.hit) {
-                const updatedNote = { ...note };
-                updatedNote.hit = true;
-                updatedNote.correct = false;
-                updatedNote.wrongInstrument = false;
-                updatedNote.slightlyOff = false;
-                return updatedNote;
-              }
-              return note;
-            });
-            
-            setNoteResults(updatedResults);
-            setLastHitAccuracy('miss');
-            updateTimingStats('miss');
-            playFeedbackSound('miss');
-            
-            toast({
-              title: `Missed Note 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
-              description: `Missed ${expectedNote.instrument} - try the next one!`,
-              variant: "destructive"
-            });
-          }
-        }
-      }, 25); // Check every 25ms for more precise timing
-    } else {
-      if (missedBeatIntervalRef.current) {
-        clearInterval(missedBeatIntervalRef.current);
-        missedBeatIntervalRef.current = null;
-      }
-    }
-    
-    return () => {
-      if (missedBeatIntervalRef.current) {
-        clearInterval(missedBeatIntervalRef.current);
-      }
-    };
-  }, [isPlaying, isTimerActive, noteResults, startTime, currentNoteIndex, scheduledNotes, currentLoop, bpm]);
-
-  const {
-    hasPermission,
-    error,
-    initializeMicrophone,
-    audioStream
-  } = useMicrophoneDetection({
-    isListening: isMicListening,
-    onHitDetected
-  });
-
-  const {
-    isRecording,
-    recordedBlob,
-    recordingDuration,
-    error: recordingError,
-    startRecording,
-    stopRecording,
-    clearRecording,
-    downloadRecording,
-    formatDuration,
-    getEstimatedSize,
-    canRecord
-  } = useAudioRecording({ 
-    stream: audioStream 
-  });
-
-  useEffect(() => {
-    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    return () => {
-      audioContextRef.current?.close();
-    };
-  }, []);
-
-  const stepDuration = 60 / bpm / 4 * 1000; // 16th notes
-
-  // Main playback interval
-  useEffect(() => {
-    if (isPlaying) {
-      intervalRef.current = setInterval(() => {
-        setCurrentStep(prev => {
-          const nextStep = (prev + 1) % 16;
-          const timeElapsed = (Date.now() - startTime) / 1000;
-          setCurrentTimeInSeconds(timeElapsed);
-          return nextStep;
-        });
-      }, stepDuration);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isPlaying, stepDuration, startTime]);
-
-  // Preview playback interval
-  useEffect(() => {
-    if (isPreviewPlaying) {
-      previewIntervalRef.current = setInterval(() => {
-        setPreviewStep(prev => {
-          const nextStep = (prev + 1) % 16;
-          
-          // Play sounds for the next step
-          if (pattern.kick[nextStep]) {
-            playDrumSound('kick');
-          }
-          if (pattern.snare[nextStep]) {
-            playDrumSound('snare');
-          }
-          if (pattern.hihat[nextStep]) {
-            playDrumSound('hihat');
-          }
-          if (pattern.openhat[nextStep]) {
-            playDrumSound('openhat');
-          }
-          
-          return nextStep;
-        });
-      }, stepDuration);
-    } else {
-      if (previewIntervalRef.current) {
-        clearInterval(previewIntervalRef.current);
-        previewIntervalRef.current = null;
-      }
-    }
-    return () => {
-      if (previewIntervalRef.current) {
-        clearInterval(previewIntervalRef.current);
-      }
-    };
-  }, [isPreviewPlaying, stepDuration, pattern]);
-
-  // Metronome for main playback
-  useEffect(() => {
-    if (isPlaying && metronomeEnabled && currentStep % 4 === 0) {
-      playMetronome();
-    }
-  }, [currentStep, isPlaying, metronomeEnabled]);
 
   const playDrumSound = (drum: string) => {
     if (!audioContextRef.current) return;
@@ -728,6 +388,349 @@ export const DrumMachine = () => {
       clickOsc.stop(context.currentTime + 0.01);
     }
   };
+
+  const onHitDetected = (hit: DetectedHit) => {
+    if (!isPlaying) {
+      console.log('Hit detected but not playing');
+      return;
+    }
+
+    const currentTime = (Date.now() - startTime) / 1000;
+    setCurrentTimeInSeconds(currentTime);
+    
+    // Stricter timing windows for per-note evaluation
+    const perfectWindow = 0.015; // ±15ms for perfect timing
+    const goodWindow = 0.025; // ±25ms for good timing
+    const acceptableWindow = 0.04; // ±40ms for acceptable timing
+
+    console.log(`Hit at ${currentTime.toFixed(3)}s, checking note ${currentNoteIndex + 1}/8 in loop ${currentLoop + 1}...`);
+
+    const detectedInstrument = detectInstrumentFromHit(hit);
+    
+    // Get the current expected note based on sequence position
+    const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
+    const expectedNote = sortedNotes[currentNoteIndex];
+    
+    if (!expectedNote) {
+      console.log('No expected note found');
+      return;
+    }
+
+    // Calculate expected time considering current loop
+    const loopDuration = 60 / bpm; // 4 beats at current BPM
+    const expectedTimeInCurrentLoop = (currentLoop * loopDuration) + expectedNote.time;
+    
+    // Check if we're within the acceptable timing window of the expected note
+    const timeDiff = Math.abs(currentTime - expectedTimeInCurrentLoop);
+    const actualTimeDiff = currentTime - expectedTimeInCurrentLoop;
+    
+    console.log(`Expected note ${currentNoteIndex + 1} at ${expectedTimeInCurrentLoop.toFixed(3)}s, timing diff: ${actualTimeDiff.toFixed(3)}s`);
+
+    if (timeDiff <= acceptableWindow) {
+      setLastHitTiming(actualTimeDiff);
+      
+      // Check if correct instrument
+      const isCorrectInstrument = detectedInstrument === expectedNote.instrument;
+      
+      if (isCorrectInstrument) {
+        // Update the note result
+        const updatedResults = noteResults.map(note => {
+          if (note.time === expectedNote.time && note.instrument === expectedNote.instrument) {
+            const updatedNote = { ...note };
+            updatedNote.hit = true;
+            
+            if (timeDiff <= perfectWindow) {
+              updatedNote.correct = true;
+              updatedNote.wrongInstrument = false;
+              updatedNote.slightlyOff = false;
+              setLastHitAccuracy('perfect');
+              updateTimingStats('perfect');
+              playFeedbackSound('perfect');
+              playDrumSound(expectedNote.instrument);
+              toast({
+                title: `Perfect Strike! 🟢 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
+                description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
+              });
+            } else if (timeDiff <= goodWindow) {
+              updatedNote.correct = false;
+              updatedNote.wrongInstrument = false;
+              updatedNote.slightlyOff = true;
+              setLastHitAccuracy('good');
+              updateTimingStats('good');
+              playFeedbackSound('good');
+              playDrumSound(expectedNote.instrument);
+              toast({
+                title: `Good Hit! 🟡 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
+                description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
+              });
+            } else {
+              updatedNote.correct = false;
+              updatedNote.wrongInstrument = false;
+              updatedNote.slightlyOff = true;
+              setLastHitAccuracy('slightly-off');
+              updateTimingStats('slightly-off');
+              playFeedbackSound('slightly-off');
+              playDrumSound(expectedNote.instrument);
+              toast({
+                title: `Close! 🟠 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
+                description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
+              });
+            }
+            return updatedNote;
+          }
+          return note;
+        });
+        setNoteResults(updatedResults);
+      } else {
+        // Wrong instrument but correct timing window
+        const updatedResults = noteResults.map(note => {
+          if (note.time === expectedNote.time && note.instrument === expectedNote.instrument) {
+            const updatedNote = { ...note };
+            updatedNote.hit = true;
+            updatedNote.correct = false;
+            updatedNote.wrongInstrument = true;
+            updatedNote.slightlyOff = false;
+            return updatedNote;
+          }
+          return note;
+        });
+        setNoteResults(updatedResults);
+        
+        setLastHitAccuracy('miss');
+        updateTimingStats('miss');
+        playFeedbackSound('miss');
+        toast({
+          title: `Wrong Instrument 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
+          description: `Hit ${detectedInstrument} but expected ${expectedNote.instrument}`,
+          variant: "destructive"
+        });
+      }
+    } else {
+      // Hit is outside the timing window for the expected note
+      console.log(`Hit outside timing window for note ${currentNoteIndex + 1} (${timeDiff.toFixed(3)}s off)`);
+      setLastHitAccuracy('miss');
+      updateTimingStats('miss');
+      playFeedbackSound('miss');
+      
+      // Don't update note results - this hit doesn't count for any note
+      toast({
+        title: `Timing Miss 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
+        description: `Hit too ${actualTimeDiff < 0 ? 'early' : 'late'} for note ${currentNoteIndex + 1} (${Math.round(Math.abs(actualTimeDiff) * 1000)}ms off)`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const {
+    hasPermission,
+    error,
+    initializeMicrophone,
+    audioStream
+  } = useMicrophoneDetection({
+    isListening: isMicListening,
+    onHitDetected
+  });
+
+  const {
+    isRecording,
+    recordedBlob,
+    recordingDuration,
+    error: recordingError,
+    startRecording,
+    stopRecording,
+    clearRecording,
+    downloadRecording,
+    formatDuration,
+    getEstimatedSize,
+    canRecord
+  } = useAudioRecording({ 
+    stream: audioStream 
+  });
+
+  // Update scheduled notes when pattern or BPM changes
+  useEffect(() => {
+    const newScheduledNotes = generateScheduledNotes(pattern, bpm);
+    setScheduledNotes(newScheduledNotes);
+    setNoteResults(newScheduledNotes.map(note => ({ ...note })));
+  }, [pattern, bpm]);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (isTimerActive && sessionTimer > 0) {
+      timerIntervalRef.current = setInterval(() => {
+        setSessionTimer(prev => {
+          if (prev <= 1) {
+            // Stop session when timer reaches 0
+            setIsPlaying(false);
+            setIsTimerActive(false);
+            
+            if (isRecording) {
+              stopRecording();
+            }
+            
+            // Calculate session duration and show summary
+            const duration = (Date.now() - sessionStartTime) / 1000;
+            setSessionDuration(duration);
+            setShowSessionSummary(true);
+            
+            toast({
+              title: "Session Complete! 🎉",
+              description: `Completed ${currentLoop} loops in 60 seconds!`
+            });
+            
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  }, [isTimerActive, sessionTimer, isRecording, currentLoop, sessionStartTime]);
+
+
+  // Monitor for missed beats with per-note timing
+  useEffect(() => {
+    if (isPlaying && isTimerActive) {
+      missedBeatIntervalRef.current = setInterval(() => {
+        const currentTime = (Date.now() - startTime) / 1000;
+        
+        // Check if current expected note has been missed
+        const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
+        const expectedNote = sortedNotes[currentNoteIndex];
+        
+        if (expectedNote) {
+          const loopDuration = 60 / bpm;
+          const expectedTimeInCurrentLoop = (currentLoop * loopDuration) + expectedNote.time;
+          
+          if (currentTime > expectedTimeInCurrentLoop + 0.04) { // 40ms grace period
+            // Mark this note as missed and advance
+            const updatedResults = noteResults.map(note => {
+              if (note.time === expectedNote.time && note.instrument === expectedNote.instrument && !note.hit) {
+                const updatedNote = { ...note };
+                updatedNote.hit = true;
+                updatedNote.correct = false;
+                updatedNote.wrongInstrument = false;
+                updatedNote.slightlyOff = false;
+                return updatedNote;
+              }
+              return note;
+            });
+            
+            setNoteResults(updatedResults);
+            setLastHitAccuracy('miss');
+            updateTimingStats('miss');
+            playFeedbackSound('miss');
+            
+            toast({
+              title: `Missed Note 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
+              description: `Missed ${expectedNote.instrument} - try the next one!`,
+              variant: "destructive"
+            });
+          }
+        }
+      }, 25); // Check every 25ms for more precise timing
+    } else {
+      if (missedBeatIntervalRef.current) {
+        clearInterval(missedBeatIntervalRef.current);
+        missedBeatIntervalRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (missedBeatIntervalRef.current) {
+        clearInterval(missedBeatIntervalRef.current);
+      }
+    };
+  }, [isPlaying, isTimerActive, noteResults, startTime, currentNoteIndex, scheduledNotes, currentLoop, bpm]);
+
+
+  useEffect(() => {
+    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    return () => {
+      audioContextRef.current?.close();
+    };
+  }, []);
+
+  const stepDuration = 60 / bpm / 4 * 1000; // 16th notes
+
+  // Main playback interval
+  useEffect(() => {
+    if (isPlaying) {
+      intervalRef.current = setInterval(() => {
+        setCurrentStep(prev => {
+          const nextStep = (prev + 1) % 16;
+          const timeElapsed = (Date.now() - startTime) / 1000;
+          setCurrentTimeInSeconds(timeElapsed);
+          return nextStep;
+        });
+      }, stepDuration);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isPlaying, stepDuration, startTime]);
+
+  // Preview playback interval
+  useEffect(() => {
+    if (isPreviewPlaying) {
+      previewIntervalRef.current = setInterval(() => {
+        setPreviewStep(prev => {
+          const nextStep = (prev + 1) % 16;
+          
+          // Play sounds for the next step
+          if (pattern.kick[nextStep]) {
+            playDrumSound('kick');
+          }
+          if (pattern.snare[nextStep]) {
+            playDrumSound('snare');
+          }
+          if (pattern.hihat[nextStep]) {
+            playDrumSound('hihat');
+          }
+          if (pattern.openhat[nextStep]) {
+            playDrumSound('openhat');
+          }
+          
+          return nextStep;
+        });
+      }, stepDuration);
+    } else {
+      if (previewIntervalRef.current) {
+        clearInterval(previewIntervalRef.current);
+        previewIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (previewIntervalRef.current) {
+        clearInterval(previewIntervalRef.current);
+      }
+    };
+  }, [isPreviewPlaying, stepDuration, pattern]);
+
+  // Metronome for main playback
+  useEffect(() => {
+    if (isPlaying && metronomeEnabled && currentStep % 4 === 0) {
+      playMetronome();
+    }
+  }, [currentStep, isPlaying, metronomeEnabled]);
+
 
   const playMetronome = () => {
     if (!audioContextRef.current) return;
