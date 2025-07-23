@@ -48,8 +48,12 @@ export const DrumMachine = () => {
   const [metronomeEnabled, setMetronomeEnabled] = useState(true);
   const [startTime, setStartTime] = useState<number>(0);
   const [currentTimeInSeconds, setCurrentTimeInSeconds] = useState<number>(0);
-  const [completedNotesCount, setCompletedNotesCount] = useState(0);
-  const [sessionCompleted, setSessionCompleted] = useState(false);
+  
+  // Timer-based session states
+  const [sessionTimer, setSessionTimer] = useState(60);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  const [currentLoop, setCurrentLoop] = useState(0);
+  const [totalNotesHit, setTotalNotesHit] = useState(0);
 
   // Timing feedback states
   const [lastHitTiming, setLastHitTiming] = useState<number | null>(null);
@@ -89,6 +93,7 @@ export const DrumMachine = () => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const previewIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const missedBeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const { toast } = useToast();
 
@@ -128,27 +133,48 @@ export const DrumMachine = () => {
     setNoteResults(newScheduledNotes.map(note => ({ ...note })));
   }, [pattern, bpm]);
 
-  // Auto-stop after 8 notes - now accepts count parameter
-  const checkAutoStop = (currentCount: number) => {
-    if (currentCount >= 8 && !sessionCompleted) {
-      setSessionCompleted(true); // Prevent multiple stops
-      setIsPlaying(false);
-      
-      if (isRecording) {
-        stopRecording();
+  // Timer countdown effect
+  useEffect(() => {
+    if (isTimerActive && sessionTimer > 0) {
+      timerIntervalRef.current = setInterval(() => {
+        setSessionTimer(prev => {
+          if (prev <= 1) {
+            // Stop session when timer reaches 0
+            setIsPlaying(false);
+            setIsTimerActive(false);
+            
+            if (isRecording) {
+              stopRecording();
+            }
+            
+            // Calculate session duration and show summary
+            const duration = (Date.now() - sessionStartTime) / 1000;
+            setSessionDuration(duration);
+            setShowSessionSummary(true);
+            
+            toast({
+              title: "Session Complete! 🎉",
+              description: `Completed ${currentLoop} loops in 60 seconds!`
+            });
+            
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
       }
-      
-      // Calculate session duration and show summary
-      const duration = (Date.now() - sessionStartTime) / 1000;
-      setSessionDuration(duration);
-      setShowSessionSummary(true);
-      
-      toast({
-        title: "Session Complete! 🎉",
-        description: "Completed 8 notes - check your results!"
-      });
     }
-  };
+    
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  }, [isTimerActive, sessionTimer, isRecording, currentLoop, sessionStartTime]);
 
   const updateTimingStats = (accuracy: 'perfect' | 'good' | 'slightly-off' | 'miss') => {
     setTimingStats(prev => {
@@ -171,15 +197,18 @@ export const DrumMachine = () => {
       return newStats;
     });
     
-    // Increment completed notes and check for auto-stop with new count
-    setCompletedNotesCount(prev => {
-      const newCount = prev + 1;
-      checkAutoStop(newCount); // Pass the new count directly
-      return newCount;
-    });
+    // Increment total notes hit
+    setTotalNotesHit(prev => prev + 1);
 
-    // Advance to next expected note
-    setCurrentNoteIndex(prev => prev + 1);
+    // Advance to next expected note with looping
+    setCurrentNoteIndex(prev => {
+      const nextIndex = prev + 1;
+      if (nextIndex >= 8) {
+        setCurrentLoop(loop => loop + 1);
+        return 0; // Reset to start of sequence
+      }
+      return nextIndex;
+    });
   };
 
   const playFeedbackSound = (accuracy: 'perfect' | 'good' | 'slightly-off' | 'miss') => {
@@ -248,7 +277,7 @@ export const DrumMachine = () => {
     const goodWindow = 0.025; // ±25ms for good timing
     const acceptableWindow = 0.04; // ±40ms for acceptable timing
 
-    console.log(`Hit at ${currentTime.toFixed(3)}s, checking note ${currentNoteIndex + 1}/8...`);
+    console.log(`Hit at ${currentTime.toFixed(3)}s, checking note ${currentNoteIndex + 1}/8 in loop ${currentLoop + 1}...`);
 
     const detectedInstrument = detectInstrumentFromHit(hit);
     
@@ -256,24 +285,20 @@ export const DrumMachine = () => {
     const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
     const expectedNote = sortedNotes[currentNoteIndex];
     
-    if (!expectedNote || currentNoteIndex >= 8) {
-      console.log('No more notes expected in sequence');
-      setLastHitAccuracy('miss');
-      updateTimingStats('miss');
-      playFeedbackSound('miss');
-      
-      toast({
-        title: "Sequence complete",
-        description: "All 8 notes have been completed"
-      });
+    if (!expectedNote) {
+      console.log('No expected note found');
       return;
     }
 
-    // Check if we're within the acceptable timing window of the expected note
-    const timeDiff = Math.abs(currentTime - expectedNote.time);
-    const actualTimeDiff = currentTime - expectedNote.time;
+    // Calculate expected time considering current loop
+    const loopDuration = 60 / bpm; // 4 beats at current BPM
+    const expectedTimeInCurrentLoop = (currentLoop * loopDuration) + expectedNote.time;
     
-    console.log(`Expected note ${currentNoteIndex + 1} at ${expectedNote.time.toFixed(3)}s, timing diff: ${actualTimeDiff.toFixed(3)}s`);
+    // Check if we're within the acceptable timing window of the expected note
+    const timeDiff = Math.abs(currentTime - expectedTimeInCurrentLoop);
+    const actualTimeDiff = currentTime - expectedTimeInCurrentLoop;
+    
+    console.log(`Expected note ${currentNoteIndex + 1} at ${expectedTimeInCurrentLoop.toFixed(3)}s, timing diff: ${actualTimeDiff.toFixed(3)}s`);
 
     if (timeDiff <= acceptableWindow) {
       setLastHitTiming(actualTimeDiff);
@@ -297,7 +322,7 @@ export const DrumMachine = () => {
               playFeedbackSound('perfect');
               playDrumSound(expectedNote.instrument);
               toast({
-                title: `Perfect Strike! 🟢 (${currentNoteIndex + 1}/8)`,
+                title: `Perfect Strike! 🟢 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
                 description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else if (timeDiff <= goodWindow) {
@@ -309,7 +334,7 @@ export const DrumMachine = () => {
               playFeedbackSound('good');
               playDrumSound(expectedNote.instrument);
               toast({
-                title: `Good Hit! 🟡 (${currentNoteIndex + 1}/8)`,
+                title: `Good Hit! 🟡 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
                 description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             } else {
@@ -321,7 +346,7 @@ export const DrumMachine = () => {
               playFeedbackSound('slightly-off');
               playDrumSound(expectedNote.instrument);
               toast({
-                title: `Close! 🟠 (${currentNoteIndex + 1}/8)`,
+                title: `Close! 🟠 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
                 description: `${expectedNote.instrument} (${Math.round(actualTimeDiff * 1000)}ms ${actualTimeDiff < 0 ? 'early' : 'late'})`
               });
             }
@@ -349,7 +374,7 @@ export const DrumMachine = () => {
         updateTimingStats('miss');
         playFeedbackSound('miss');
         toast({
-          title: `Wrong Instrument 🔴 (${currentNoteIndex + 1}/8)`,
+          title: `Wrong Instrument 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
           description: `Hit ${detectedInstrument} but expected ${expectedNote.instrument}`,
           variant: "destructive"
         });
@@ -363,7 +388,7 @@ export const DrumMachine = () => {
       
       // Don't update note results - this hit doesn't count for any note
       toast({
-        title: `Timing Miss 🔴 (${currentNoteIndex + 1}/8)`,
+        title: `Timing Miss 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
         description: `Hit too ${actualTimeDiff < 0 ? 'early' : 'late'} for note ${currentNoteIndex + 1} (${Math.round(Math.abs(actualTimeDiff) * 1000)}ms off)`,
         variant: "destructive"
       });
@@ -372,16 +397,19 @@ export const DrumMachine = () => {
 
   // Monitor for missed beats with per-note timing
   useEffect(() => {
-    if (isPlaying && !sessionCompleted) {
+    if (isPlaying && isTimerActive) {
       missedBeatIntervalRef.current = setInterval(() => {
         const currentTime = (Date.now() - startTime) / 1000;
         
         // Check if current expected note has been missed
-        if (currentNoteIndex < 8) {
-          const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
-          const expectedNote = sortedNotes[currentNoteIndex];
+        const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
+        const expectedNote = sortedNotes[currentNoteIndex];
+        
+        if (expectedNote) {
+          const loopDuration = 60 / bpm;
+          const expectedTimeInCurrentLoop = (currentLoop * loopDuration) + expectedNote.time;
           
-          if (expectedNote && currentTime > expectedNote.time + 0.04) { // 40ms grace period
+          if (currentTime > expectedTimeInCurrentLoop + 0.04) { // 40ms grace period
             // Mark this note as missed and advance
             const updatedResults = noteResults.map(note => {
               if (note.time === expectedNote.time && note.instrument === expectedNote.instrument && !note.hit) {
@@ -401,7 +429,7 @@ export const DrumMachine = () => {
             playFeedbackSound('miss');
             
             toast({
-              title: `Missed Note 🔴 (${currentNoteIndex + 1}/8)`,
+              title: `Missed Note 🔴 (Loop ${currentLoop + 1} - ${currentNoteIndex + 1}/8)`,
               description: `Missed ${expectedNote.instrument} - try the next one!`,
               variant: "destructive"
             });
@@ -420,7 +448,7 @@ export const DrumMachine = () => {
         clearInterval(missedBeatIntervalRef.current);
       }
     };
-  }, [isPlaying, noteResults, startTime, sessionCompleted, currentNoteIndex, scheduledNotes]);
+  }, [isPlaying, isTimerActive, noteResults, startTime, currentNoteIndex, scheduledNotes, currentLoop, bpm]);
 
   const {
     hasPermission,
@@ -748,9 +776,11 @@ export const DrumMachine = () => {
       setCurrentTimeInSeconds(0);
       setLastHitTiming(null);
       setLastHitAccuracy(null);
-      setCompletedNotesCount(0);
-      setCurrentNoteIndex(0); // Reset note sequence tracking
-      setSessionCompleted(false);
+      setTotalNotesHit(0);
+      setCurrentNoteIndex(0);
+      setCurrentLoop(0);
+      setSessionTimer(60);
+      setIsTimerActive(true);
       setTimingStats({
         perfectHits: 0,
         goodHits: 0,
@@ -761,6 +791,9 @@ export const DrumMachine = () => {
       });
       console.log('Practice started, timer reset');
     } else {
+      // Stop timer when stopping playback
+      setIsTimerActive(false);
+      
       // Calculate session duration when stopping
       const duration = (Date.now() - sessionStartTime) / 1000;
       setSessionDuration(duration);
@@ -775,7 +808,7 @@ export const DrumMachine = () => {
     if (!isPlaying) {
       toast({
         title: "Practice started",
-        description: "Hit 8 notes in sequence to complete the session!"
+        description: "60-second session with continuous loops!"
       });
     }
   };
@@ -824,9 +857,11 @@ export const DrumMachine = () => {
           setCurrentTimeInSeconds(0);
           setLastHitTiming(null);
           setLastHitAccuracy(null);
-          setCompletedNotesCount(0);
-          setCurrentNoteIndex(0); // Reset note sequence tracking
-          setSessionCompleted(false);
+          setTotalNotesHit(0);
+          setCurrentNoteIndex(0);
+          setCurrentLoop(0);
+          setSessionTimer(60);
+          setIsTimerActive(true);
           setTimingStats({
             perfectHits: 0,
             goodHits: 0,
@@ -841,7 +876,7 @@ export const DrumMachine = () => {
         startRecording();
         toast({
           title: "Recording started",
-          description: "Auto-started playback - hit 8 notes in sequence!"
+          description: "Auto-started 60-second session!"
         });
       } else {
         toast({
@@ -867,10 +902,13 @@ export const DrumMachine = () => {
     // Comprehensive reset
     setIsPlaying(false);
     setIsPreviewPlaying(false);
+    setIsTimerActive(false);
     setCurrentStep(0);
     setPreviewStep(0);
     setShowSessionSummary(false);
-    setSessionCompleted(false);
+    setSessionTimer(60);
+    setCurrentLoop(0);
+    setTotalNotesHit(0);
     
     // Reset all timing data
     const resetNotes = generateScheduledNotes(pattern, bpm);
@@ -878,8 +916,7 @@ export const DrumMachine = () => {
     setScheduledNotes(resetNotes);
     setLastHitTiming(null);
     setLastHitAccuracy(null);
-    setCompletedNotesCount(0);
-    setCurrentNoteIndex(0); // Reset note sequence tracking
+    setCurrentNoteIndex(0);
     setTimingStats({
       perfectHits: 0,
       goodHits: 0,
@@ -920,7 +957,8 @@ export const DrumMachine = () => {
     // Reset timing feedback
     setLastHitTiming(null);
     setLastHitAccuracy(null);
-    setCompletedNotesCount(0);
+    setTotalNotesHit(0);
+    setCurrentLoop(0);
     setTimingStats({
       perfectHits: 0,
       goodHits: 0,
@@ -945,9 +983,11 @@ export const DrumMachine = () => {
     setScheduledNotes(resetNotes);
     setLastHitTiming(null);
     setLastHitAccuracy(null);
-    setCompletedNotesCount(0);
-    setCurrentNoteIndex(0); // Reset note sequence tracking
-    setSessionCompleted(false);
+    setTotalNotesHit(0);
+    setCurrentNoteIndex(0);
+    setCurrentLoop(0);
+    setSessionTimer(60);
+    setIsTimerActive(true);
     setTimingStats({
       perfectHits: 0,
       goodHits: 0,
@@ -967,7 +1007,7 @@ export const DrumMachine = () => {
     
     toast({
       title: "New session started",
-      description: "Hit 8 notes in sequence again!"
+      description: "60-second session with continuous loops!"
     });
   };
 
@@ -978,18 +1018,27 @@ export const DrumMachine = () => {
 
   // Calculate next beat time for anticipation - now shows next expected note
   const getNextBeatTime = () => {
-    if (!isPlaying || currentNoteIndex >= 8) return null;
+    if (!isPlaying || !isTimerActive) return null;
     
     const sortedNotes = [...scheduledNotes].sort((a, b) => a.time - b.time);
     const nextNote = sortedNotes[currentNoteIndex];
     
-    return nextNote ? nextNote.time : null;
+    if (!nextNote) return null;
+    
+    const loopDuration = 60 / bpm;
+    return (currentLoop * loopDuration) + nextNote.time;
   };
 
   // Calculate accuracy percentage for recording status
   const getAccuracyPercentage = () => {
     if (timingStats.totalHits === 0) return 100;
     return Math.round(((timingStats.perfectHits + timingStats.goodHits) / timingStats.totalHits) * 100);
+  };
+
+  // Calculate Notes Per Minute
+  const getNotesPerMinute = () => {
+    if (sessionDuration === 0) return 0;
+    return Math.round((totalNotesHit / sessionDuration) * 60);
   };
 
   return (
@@ -1063,19 +1112,29 @@ export const DrumMachine = () => {
           </Button>
         </div>
 
-        {/* Progress Display */}
-        {isPlaying && (
+        {/* Timer and Loop Progress Display */}
+        {isPlaying && isTimerActive && (
           <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-primary rounded-full animate-pulse"></div>
-                <span className="text-primary font-medium">Session Progress</span>
-                <span className="text-muted-foreground">
-                  {completedNotesCount}/8 notes completed
-                </span>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 bg-primary rounded-full animate-pulse"></div>
+                  <span className="text-primary font-bold text-xl">
+                    {sessionTimer}s
+                  </span>
+                  <span className="text-muted-foreground">remaining</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-primary font-medium">
+                    Loop {currentLoop + 1} - Note {currentNoteIndex + 1}/8
+                  </span>
+                  <span className="text-muted-foreground">
+                    Total: {totalNotesHit} notes
+                  </span>
+                </div>
               </div>
               <div className="text-sm text-muted-foreground">
-                {8 - completedNotesCount} notes remaining
+                {currentLoop} loops completed
               </div>
             </div>
           </div>
@@ -1152,7 +1211,7 @@ export const DrumMachine = () => {
         <div className="text-center mb-6">
           <p className="text-muted-foreground text-lg">
             {isPreviewPlaying ? "Preview playing - listen to the rhythm" : 
-             isPlaying ? "Hit the drums at the highlighted times - complete 8 notes!" : 
+             isPlaying ? "60-second session - loops continuously until time runs out!" : 
              "Click on the grid to add or remove notes"}
           </p>
           {isPlaying && (
@@ -1183,6 +1242,9 @@ export const DrumMachine = () => {
           onClose={() => setShowSessionSummary(false)}
           onPlayAgain={handlePlayAgain}
           onReset={handleNewPattern}
+          currentLoop={currentLoop}
+          totalNotesHit={totalNotesHit}
+          notesPerMinute={getNotesPerMinute()}
         />
       </div>
     </div>
